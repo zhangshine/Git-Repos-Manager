@@ -1,32 +1,29 @@
 <template>
-  <div class="container p-4" style="width: 500px;">
-    <h2>Repo Groupie Options</h2>
-    <hr />
+  <v-container style="max-width: 500px;">
+    <h2 class="pb-2">Repo Groupie Options</h2>
+    <v-divider></v-divider>
 
-    <div class="mb-3">
-      <label for="githubTokenInput" class="form-label">GitHub Personal Access Token</label>
-      <input
-        type="password"
-        class="form-control"
-        id="githubTokenInput"
-        v-model="localGithubToken"
-        placeholder="Enter your GitHub PAT"
-      />
-      <div class="form-text">
-        Ensure your token has the 'repo' scope to read repository data.
-      </div>
-    </div>
+    <v-text-field
+      v-model="localGithubToken"
+      label="GitHub Personal Access Token"
+      type="password"
+      placeholder="Enter your GitHub PAT"
+      hint="Ensure your token has the 'repo' scope to read repository data."
+      persistent-hint
+      class="mt-4 mb-2"
+    ></v-text-field>
 
-    <button class="btn btn-primary mr-2" @click="handleSaveToken">Save Token</button>
-    <button class="btn btn-secondary" @click="handleClearToken" v-if="store.githubToken.value">Clear Token</button>
-    <p v-if="statusMessage" class="mt-2" :class="{'text-success': !isError, 'text-danger': isError}">{{ statusMessage }}</p>
+    <v-btn color="primary" @click="handleSaveToken" class="mr-2">Save Token</v-btn>
+    <v-btn @click="handleClearToken" v-if="store.githubToken.value">Clear Token</v-btn>
 
-    <hr class="mt-4 mb-3" />
+    <v-alert v-if="statusMessage" :type="isError ? 'error' : 'success'" density="compact" class="mt-3">{{ statusMessage }}</v-alert>
+
+    <v-divider class="mt-4 mb-3"></v-divider>
     <h5>Connected Accounts (Status from Store)</h5>
     <p>GitHub: {{ store.githubToken.value ? 'Token stored' : 'Not configured' }}</p>
     <p>GitLab: Not configured</p>
     <p>Bitbucket: Not configured</p>
-  </div>
+  </v-container>
 </template>
 
 <script setup lang="ts">
@@ -85,10 +82,6 @@ const handleClearToken = async () => {
 </script>
 
 <style scoped>
-.container {
-  max-width: 600px;
-}
-.mr-2 {
-  margin-right: 0.5rem;
-}
+/* Specific styles can remain if needed, but Vuetify handles most common cases. */
+/* For example, if .container had very specific padding/margin not covered by v-container default */
 </style>
