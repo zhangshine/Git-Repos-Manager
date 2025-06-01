@@ -71,12 +71,19 @@ async function loadTokens() {
 async function loadGroups() {
   try {
     const result = await chrome.storage.local.get(['repositoryGroups']);
-    if (result.repositoryGroups) {
+    // Ensure that groups.value is always an array
+    if (Array.isArray(result.repositoryGroups)) {
       groups.value = result.repositoryGroups;
+    } else {
+      // If it's not an array (e.g., undefined, null, or corrupted), initialize as an empty array
+      groups.value = [];
+      if (result.repositoryGroups !== undefined) { // Log if there was something but it wasn't an array
+        console.warn('Loaded "repositoryGroups" from storage, but it was not an array. Initializing to empty array. Value was:', result.repositoryGroups);
+      }
     }
   } catch (e) {
     console.error('Error loading groups from storage:', e);
-    // Optionally set an error state for groups
+    groups.value = []; // Also ensure groups is an array in case of an error during storage access
   }
 }
 
