@@ -1,83 +1,110 @@
 <template>
-  <div class="container p-3 popup-container">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h4 class="mb-0">My Repositories</h4>
-      <button class="btn btn-sm btn-info" @click="refreshRepos" :disabled="store.isLoading.value" title="Refresh Repositories">
-        <span v-if="store.isLoading.value" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-        <span v-else>&#x21bb;</span> <!-- Refresh symbol -->
-      </button>
-    </div>
+  <v-container class="popup-container" fluid>
+    <v-row align="center" class="mb-3">
+      <v-col>
+        <div class="text-h5">My Repositories</div>
+      </v-col>
+      <v-col cols="auto">
+        <v-btn size="small" color="info" icon :loading="store.isLoading.value" :disabled="store.isLoading.value" @click="refreshRepos" title="Refresh Repositories">
+          <v-icon>mdi-refresh</v-icon>
+        </v-btn>
+      </v-col>
+    </v-row>
 
     <!-- Loading and Error States -->
-    <div v-if="store.isLoading.value && store.repositories.value.length === 0" class="text-center mt-4">
-      <div class="spinner-border spinner-border" role="status">
-        <span class="sr-only">Loading...</span>
-      </div>
-      <p>Loading repositories...</p>
-    </div>
-    <div v-if="!store.isLoading.value && store.error.value" class="alert alert-danger">
+    <v-row v-if="store.isLoading.value && store.repositories.value.length === 0" justify="center" class="mt-4">
+      <v-col class="text-center">
+        <v-progress-circular indeterminate color="primary"></v-progress-circular>
+        <p class="mt-2">Loading repositories...</p>
+      </v-col>
+    </v-row>
+    <v-alert v-if="!store.isLoading.value && store.error.value" type="error" density="compact" class="mb-3">
       {{ store.error.value }}
-      <p>Visit <a href="#" @click.prevent="openOptionsPage">options</a> to check configuration.</p>
-    </div>
+      <p>Visit <a href="#" @click.prevent="openOptionsPage" class="text-white font-weight-bold">options</a> to check configuration.</p>
+    </v-alert>
 
     <!-- Group Management -->
     <div class="mb-3">
-      <div class="input-group input-group-sm mb-2">
-        <input type="text" class="form-control" v-model="newGroupName" placeholder="New group name" @keyup.enter="handleCreateGroup">
-        <button class="btn btn-outline-success" @click="handleCreateGroup" :disabled="!newGroupName.trim()">Add Group</button>
-      </div>
-      <p v-if="groupError" class="text-danger small">{{ groupError }}</p>
+      <v-text-field
+        v-model="newGroupName"
+        label="New group name"
+        density="compact"
+        hide-details="auto"
+        @keyup.enter="handleCreateGroup"
+        class="mb-1"
+      >
+        <template v-slot:append>
+          <v-btn variant="outlined" color="success" @click="handleCreateGroup" :disabled="!newGroupName.trim()">Add Group</v-btn>
+        </template>
+      </v-text-field>
+      <v-alert v-if="groupError" type="error" density="compact" class="mt-1">{{ groupError }}</v-alert>
     </div>
 
     <!-- Display Repositories by Group -->
     <div v-if="!store.isLoading.value && !store.error.value && store.repositories.value.length > 0">
       <!-- Grouped Repositories -->
       <div v-for="(groupRepos, groupName) in store.repositoriesByGroup.value.grouped" :key="groupName" class="mb-3">
-        <h5 class="d-flex justify-content-between align-items-center group-header">
-          <span>{{ groupName }}</span>
-          <button class="btn btn-xs btn-outline-danger" @click="confirmDeleteGroup(getGroupIdByName(groupName))">&times;</button>
-        </h5>
-        <ul class="list-group list-group-sm">
-          <li v-for="repo in groupRepos" :key="repo.id" class="list-group-item d-flex justify-content-between align-items-center">
-            <a :href="repo.url" target="_blank" :title="repo.description || repo.name" class="repo-link">
-              {{ repo.owner }}/{{ repo.name }} ({{ repo.source }})
-            </a>
-            <div>
-              <button class="btn btn-xs btn-outline-secondary" @click="assignToGroupPrompt(repo)">+/-</button>
-            </div>
-          </li>
-          <li v-if="groupRepos.length === 0" class="list-group-item text-muted small">No repositories in this group.</li>
-        </ul>
+        <v-row align="center" no-gutters class="group-header-custom">
+          <v-col>
+            <div class="text-subtitle-1">{{ groupName }}</div>
+          </v-col>
+          <v-col cols="auto">
+            <v-btn icon variant="text" size="x-small" @click="confirmDeleteGroup(getGroupIdByName(groupName))" title="Delete group">
+              <v-icon>mdi-close</v-icon>
+            </v-btn>
+          </v-col>
+        </v-row>
+        <v-list density="compact" lines="one">
+          <v-list-item v-for="repo in groupRepos" :key="repo.id">
+            <v-list-item-title>
+              <a :href="repo.url" target="_blank" :title="repo.description || repo.name" class="repo-link-custom">
+                {{ repo.owner }}/{{ repo.name }} ({{ repo.source }})
+              </a>
+            </v-list-item-title>
+            <template v-slot:append>
+              <v-btn size="x-small" variant="outlined" @click="assignToGroupPrompt(repo)" title="Assign to group">+/-</v-btn>
+            </template>
+          </v-list-item>
+          <v-list-item v-if="groupRepos.length === 0">
+            <v-list-item-title class="text-caption text-disabled">No repositories in this group.</v-list-item-title>
+          </v-list-item>
+        </v-list>
       </div>
 
       <!-- Ungrouped Repositories -->
       <div v-if="store.repositoriesByGroup.value.ungrouped.length > 0" class="mb-3">
-        <h5 class="group-header">Ungrouped</h5>
-        <ul class="list-group list-group-sm">
-          <li v-for="repo in store.repositoriesByGroup.value.ungrouped" :key="repo.id" class="list-group-item d-flex justify-content-between align-items-center">
-            <a :href="repo.url" target="_blank" :title="repo.description || repo.name" class="repo-link">
-              {{ repo.owner }}/{{ repo.name }} ({{ repo.source }})
-            </a>
-            <div>
-              <button class="btn btn-xs btn-outline-secondary" @click="assignToGroupPrompt(repo)">+/-</button>
-            </div>
-          </li>
-        </ul>
+        <div class="text-subtitle-1 group-header-custom">Ungrouped</div>
+        <v-list density="compact" lines="one">
+          <v-list-item v-for="repo in store.repositoriesByGroup.value.ungrouped" :key="repo.id">
+            <v-list-item-title>
+              <a :href="repo.url" target="_blank" :title="repo.description || repo.name" class="repo-link-custom">
+                {{ repo.owner }}/{{ repo.name }} ({{ repo.source }})
+              </a>
+            </v-list-item-title>
+            <template v-slot:append>
+              <v-btn size="x-small" variant="outlined" @click="assignToGroupPrompt(repo)" title="Assign to group">+/-</v-btn>
+            </template>
+          </v-list-item>
+        </v-list>
       </div>
     </div>
 
-    <div v-if="!store.isLoading.value && !store.error.value && store.repositories.value.length === 0 && store.isAuthenticated.value" class="text-center mt-4">
-      <p>No repositories found. Try refreshing.</p>
-    </div>
-    <div v-if="!store.isAuthenticated.value && !store.isLoading.value" class="text-center mt-4">
+    <v-row v-if="!store.isLoading.value && !store.error.value && store.repositories.value.length === 0 && store.isAuthenticated.value" justify="center" class="mt-4">
+      <v-col class="text-center">
+        <p>No repositories found. Try refreshing.</p>
+      </v-col>
+    </v-row>
+    <v-row v-if="!store.isAuthenticated.value && !store.isLoading.value" justify="center" class="mt-4">
+      <v-col class="text-center">
         <p>Please <a href="#" @click.prevent="openOptionsPage">configure your API token(s)</a> to see repositories.</p>
-    </div>
+      </v-col>
+    </v-row>
 
-    <hr class="my-2">
-    <button class="btn btn-sm btn-outline-secondary w-100" @click="openOptionsPage">
+    <v-divider class="my-2"></v-divider>
+    <v-btn variant="outlined" size="small" block @click="openOptionsPage">
       Settings
-    </button>
-  </div>
+    </v-btn>
+  </v-container>
 </template>
 
 <script setup lang="ts">
@@ -171,37 +198,38 @@ onMounted(async () => {
 
 <style scoped>
 .popup-container {
-  width: 400px; /* Increased width */
+  width: 400px;
   min-height: 300px;
   max-height: 500px; /* Max height before scroll */
   overflow-y: auto;
 }
-.w-100 { width: 100%; }
-.my-2 { margin-top: 0.5rem; margin-bottom: 0.5rem; }
-.repo-link {
+.repo-link-custom {
   text-decoration: none;
   color: inherit;
-  flex-grow: 1;
-  margin-right: 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: inline-block; /* Ensures ellipsis works with other elements if any */
+  max-width: 100%; /* Ensure it doesn't overflow its container */
 }
-.repo-link:hover { text-decoration: underline; }
-.btn-xs { /* For smaller buttons */
-  padding: .1rem .25rem;
-  font-size: .75rem;
-  line-height: 1.5;
+.repo-link-custom:hover {
+  text-decoration: underline;
 }
-.group-header {
-  font-size: 0.95rem;
-  color: #333;
+.group-header-custom {
+  font-size: 0.95rem; /* Consider Vuetify typography classes if they match */
+  color: #333; /* Or use Vuetify theme colors */
   margin-bottom: 0.3rem;
   padding-bottom: 0.2rem;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #eee; /* v-divider could be an alternative if design allows */
 }
-.list-group-sm .list-group-item {
-    padding: .3rem .5rem; /* Smaller list items */
-    font-size: 0.85rem;
+
+/* Ensure v-list-item content doesn't cause overflow with the button */
+:deep(.v-list-item__content) {
+  overflow: hidden;
+}
+:deep(.v-list-item-title) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
