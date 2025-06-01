@@ -1,5 +1,5 @@
 {
-  "name": "app",
+  "name": "git-repos-manager",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -14,7 +14,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/zhangshine/Git-Repos-Manager/issues"
   },
