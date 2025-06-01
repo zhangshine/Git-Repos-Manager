@@ -109,14 +109,18 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
+import { useRouter } from 'vue-router'; // Add this import
 import { useStore } from '../store';
 import type { Repository, RepoGroup } from '../store'; // Assuming RepoGroup is exported from store or defined locally
 
 const store = useStore();
+const router = useRouter(); // Add this
 const newGroupName = ref('');
 const groupError = ref<string | null>(null);
 
-const openOptionsPage = () => chrome.runtime.openOptionsPage();
+const openOptionsPage = () => {
+  router.push('/options');
+};
 const refreshRepos = () => store.fetchRepositories();
 
 const handleCreateGroup = async () => {

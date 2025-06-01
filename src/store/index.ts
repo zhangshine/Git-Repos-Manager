@@ -53,50 +53,51 @@ const repositoriesByGroup = computed(() => {
 
 // --- Actions (Functions to modify state) ---
 
-// Function to load tokens from chrome.storage.local
-async function loadTokens() {
+// Function to load tokens from localStorage
+function loadTokens() {
   try {
-    const result = await chrome.storage.local.get(['githubToken' /*, 'gitlabToken', 'bitbucketToken' */]);
-    if (result.githubToken) {
-      githubToken.value = result.githubToken;
+    const storedGithubToken = localStorage.getItem('githubToken');
+    if (storedGithubToken) {
+      githubToken.value = storedGithubToken;
     }
     // Load other tokens similarly
   } catch (e) {
-    console.error('Error loading tokens from storage:', e);
+    console.error('Error loading tokens from localStorage:', e);
     error.value = 'Could not load token configuration.';
   }
 }
 
-
-async function loadGroups() {
+function loadGroups() {
   try {
-    const result = await chrome.storage.local.get(['repositoryGroups']);
-    // Ensure that groups.value is always an array
-    if (Array.isArray(result.repositoryGroups)) {
-      groups.value = result.repositoryGroups;
-    } else {
-      // If it's not an array (e.g., undefined, null, or corrupted), initialize as an empty array
-      groups.value = [];
-      if (result.repositoryGroups !== undefined) { // Log if there was something but it wasn't an array
-        console.warn('Loaded "repositoryGroups" from storage, but it was not an array. Initializing to empty array. Value was:', result.repositoryGroups);
+    const storedGroups = localStorage.getItem('repositoryGroups');
+    if (storedGroups) {
+      const parsedGroups = JSON.parse(storedGroups);
+      if (Array.isArray(parsedGroups)) {
+        groups.value = parsedGroups;
+      } else {
+        groups.value = [];
+        console.warn('Loaded "repositoryGroups" from localStorage, but it was not an array. Initializing to empty array. Value was:', parsedGroups);
       }
+    } else {
+      groups.value = []; // Initialize if nothing in storage
     }
   } catch (e) {
-    console.error('Error loading groups from storage:', e);
-    groups.value = []; // Also ensure groups is an array in case of an error during storage access
+    console.error('Error loading groups from localStorage:', e);
+    groups.value = []; // Also ensure groups is an array in case of an error during storage access or parsing
   }
 }
 
-async function saveGroups() {
+function saveGroups() {
   try {
-    await chrome.storage.local.set({ repositoryGroups: groups.value });
+    localStorage.setItem('repositoryGroups', JSON.stringify(groups.value));
   } catch (e) {
-    console.error('Error saving groups to storage:', e);
+    console.error('Error saving groups to localStorage:', e);
     // Optionally set an error state for groups
   }
 }
 
-async function addGroup(name: string) {
+// Modified to be synchronous as saveGroups is now sync
+function addGroup(name: string) {
   if (!name.trim()) throw new Error('Group name cannot be empty.');
   const existingGroup = groups.value.find(g => g.name.toLowerCase() === name.trim().toLowerCase());
   if (existingGroup) throw new Error(`Group '${name}' already exists.`);
@@ -107,15 +108,17 @@ async function addGroup(name: string) {
     repoIds: [],
   };
   groups.value.push(newGroup);
-  await saveGroups();
+  saveGroups(); // Now synchronous
 }
 
-async function deleteGroup(groupId: string) {
+// Modified to be synchronous
+function deleteGroup(groupId: string) {
   groups.value = groups.value.filter(g => g.id !== groupId);
-  await saveGroups();
+  saveGroups(); // Now synchronous
 }
 
-async function addRepoToGroup(groupId: string, repoId: string | number) {
+// Modified to be synchronous
+function addRepoToGroup(groupId: string, repoId: string | number) {
   const group = groups.value.find(g => g.id === groupId);
   if (group && !group.repoIds.includes(repoId)) {
     // Remove from other groups first to ensure a repo is in at most one group
@@ -125,40 +128,50 @@ async function addRepoToGroup(groupId: string, repoId: string | number) {
         }
     });
     group.repoIds.push(repoId);
-    await saveGroups();
+    saveGroups(); // Now synchronous
   }
 }
 
-async function removeRepoFromGroup(groupId: string, repoId: string | number) {
+// Modified to be synchronous
+function removeRepoFromGroup(groupId: string, repoId: string | number) {
   const group = groups.value.find(g => g.id === groupId);
   if (group) {
     group.repoIds = group.repoIds.filter(id => id !== repoId);
-    await saveGroups();
+    saveGroups(); // Now synchronous
   }
 }
 
 // Watch for changes in groups and save them.
 // This provides a more robust way to persist group changes automatically.
-// However, explicit saveGroups() after mutations is also fine and might be clearer.
 // For now, explicit saveGroups() is used. If auto-save is preferred:
 // watch(groups, saveGroups, { deep: true });
 
-// Function to save GitHub token
-async function saveGithubToken(token: string) {
+// Function to save GitHub token (now synchronous for localStorage)
+function saveGithubToken(token: string) {
   if (!token.trim()) {
     throw new Error('Token cannot be empty.');
   }
-  await chrome.storage.local.set({ githubToken: token });
-  githubToken.value = token;
+  try {
+    localStorage.setItem('githubToken', token);
+    githubToken.value = token;
+  } catch (e) {
+    console.error('Error saving GitHub token to localStorage:', e);
+    throw new Error('Failed to save token to local storage.'); // Re-throw or handle as appropriate
+  }
 }
 
-// Function to clear GitHub token
-async function clearGithubToken() {
-  await chrome.storage.local.remove('githubToken');
-  githubToken.value = null;
+// Function to clear GitHub token (now synchronous for localStorage)
+function clearGithubToken() {
+  try {
+    localStorage.removeItem('githubToken');
+    githubToken.value = null;
+  } catch (e) {
+    console.error('Error removing GitHub token from localStorage:', e);
+    throw new Error('Failed to clear token from local storage.'); // Re-throw or handle
+  }
 }
 
-// Function to fetch repositories
+// Function to fetch repositories (remains async as it deals with external APIs)
 // For now, focuses on GitHub. Will be expanded for other services.
 async function fetchRepositories() {
   if (!githubToken.value) {
