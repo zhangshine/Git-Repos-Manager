@@ -202,9 +202,8 @@ onMounted(async () => {
 
 <style scoped>
 .popup-container {
-  width: 400px;
-  min-height: 300px;
-  max-height: 500px; /* Max height before scroll */
+  width: 100%;
+  height: 100%;
   overflow-y: auto;
 }
 .repo-link-custom {
