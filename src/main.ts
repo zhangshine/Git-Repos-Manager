@@ -1,16 +1,28 @@
-// Vuetify
-import 'vuetify/styles'
-import { createVuetify } from 'vuetify'
-import * as components from 'vuetify/components'
-import * as directives from 'vuetify/directives'
+import { createApp } from 'vue';
+import App from './App.vue';
+import router from './router'; // Import the router
+import './styles/main.css';
 
-// Icons
-import '@mdi/font/css/materialdesignicons.css' // Ensure you are using css-loader
-import 'material-design-icons-iconfont/dist/material-design-icons.css' // Ensure you are using css-loader
+// Vuetify will be integrated in a later step, preparing its place
+import vuetify from './plugins/vuetify';
 
-const vuetify = createVuetify({
-  components,
-  directives,
-})
+const app = createApp(App);
 
-export default vuetify
+app.use(router); // Use the router
+
+app.use(vuetify); // Vuetify will be enabled after its setup
+
+app.mount('#app');
+
+// Service worker registration code
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(registration => {
+        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+      })
+      .catch(err => {
+        console.log('ServiceWorker registration failed: ', err);
+      });
+  });
+}
