@@ -19,21 +19,47 @@
     <v-alert v-if="statusMessage" :type="isError ? 'error' : 'success'" density="compact" class="mt-3">{{ statusMessage }}</v-alert>
 
     <v-divider class="mt-4 mb-3"></v-divider>
-    <h5>Connected Accounts (Status from Store)</h5>
-    <p>GitHub: {{ store.githubToken.value ? 'Token stored' : 'Not configured' }}</p>
-    <p>GitLab: Not configured</p>
-    <p>Bitbucket: Not configured</p>
+    <h5>Connected Accounts</h5>
+    <v-table class="mt-4">
+      <thead>
+        <tr>
+          <th class="text-left">Platform</th>
+          <th class="text-left">Status</th>
+          <th class="text-left">Token Display</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="account in accounts" :key="account.platform">
+          <td>{{ account.platform }}</td>
+          <td>{{ account.status }}</td>
+          <td>
+            <span v-if="account.tokenExists" style="color: green;">********</span>
+            <span v-else>N/A</span>
+          </td>
+        </tr>
+      </tbody>
+    </v-table>
   </v-container>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import { useStore } from '../store'; // Adjusted path
 
 const store = useStore();
 const localGithubToken = ref(''); // Local ref for the input field
 const statusMessage = ref('');
 const isError = ref(false);
+
+const accounts = ref([
+  {
+    platform: 'GitHub',
+    get status() { return store.githubToken.value ? 'Token stored' : 'Not configured'; },
+    get tokenExists() { return !!store.githubToken.value; }
+  },
+  { platform: 'GitLab', status: 'Not configured', tokenExists: false },
+  { platform: 'Bitbucket', status: 'Not configured', tokenExists: false }
+]);
 
 onMounted(() => {
   // Initialize localGithubToken from store if token exists,
