@@ -41,7 +41,7 @@
     </div>
 
     <!-- Display Repositories by Group -->
-    <div v-if="!store.isLoading.value && !store.error.value && store.repositories.value.length > 0">
+    <div v-if="!store.isLoading.value && !store.error.value && (store.groups.value.length > 0 || store.repositories.value.length > 0)">
       <!-- Grouped Repositories -->
       <div v-for="(groupRepos, groupName) in store.repositoriesByGroup.value.grouped" :key="groupName" class="mb-3">
         <v-row align="center" no-gutters class="group-header-custom">
@@ -89,7 +89,7 @@
       </div>
     </div>
 
-    <v-row v-if="!store.isLoading.value && !store.error.value && store.repositories.value.length === 0 && store.isAuthenticated.value" justify="center" class="mt-4">
+    <v-row v-if="!store.isLoading.value && !store.error.value && store.repositories.value.length === 0 && store.groups.value.length === 0 && store.isAuthenticated.value" justify="center" class="mt-4">
       <v-col class="text-center">
         <p>No repositories found. Try refreshing.</p>
       </v-col>
