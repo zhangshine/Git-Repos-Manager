@@ -46,13 +46,13 @@
       <div
         v-for="(groupRepos, groupName) in store.repositoriesByGroup.value.grouped"
         :key="groupName"
-        class="mb-3 group-drop-zone"
+        class="group-container"
         @dragover.prevent
         @drop="onDrop(getGroupIdByName(groupName), $event)"
       >
         <v-row align="center" no-gutters class="group-header-custom">
           <v-col>
-            <div class="text-subtitle-1">{{ groupName }}</div>
+            <div class="group-title-text">{{ groupName }}</div>
           </v-col>
           <v-col cols="auto">
             <v-btn icon variant="text" size="x-small" @click="confirmDeleteGroup(getGroupIdByName(groupName))" title="Delete group">
@@ -61,7 +61,7 @@
           </v-col>
         </v-row>
         <v-row v-if="groupRepos.length > 0">
-          <v-col v-for="repo in groupRepos" :key="repo.id" cols="12" sm="6" md="4" lg="3">
+          <v-col v-for="repo in groupRepos" :key="repo.id" cols="12" sm="4" md="3" lg="2">
             <v-card class="d-flex flex-column fill-height">
               <v-card-title>{{ repo.name }}</v-card-title>
               <v-card-subtitle>{{ repo.owner }} / {{ repo.source }}</v-card-subtitle>
@@ -79,10 +79,12 @@
       </div>
 
       <!-- Ungrouped Repositories -->
-      <div v-if="store.repositoriesByGroup.value.ungrouped.length > 0" class="mb-3">
-        <div class="text-subtitle-1 group-header-custom">Ungrouped</div>
+      <div v-if="store.repositoriesByGroup.value.ungrouped.length > 0" class="group-container">
+        <div class="group-header-custom">
+          <span class="group-title-text">Ungrouped</span>
+        </div>
         <v-row>
-          <v-col v-for="repo in store.repositoriesByGroup.value.ungrouped" :key="repo.id" cols="12" sm="6" md="4" lg="3">
+          <v-col v-for="repo in store.repositoriesByGroup.value.ungrouped" :key="repo.id" cols="12" sm="4" md="3" lg="2">
             <v-card draggable="true" @dragstart="onDragStart(repo, $event)" class="d-flex flex-column fill-height">
               <v-card-title>{{ repo.name }}</v-card-title>
               <v-card-subtitle>{{ repo.owner }} / {{ repo.source }}</v-card-subtitle>
@@ -107,11 +109,6 @@
         <p>Please <a href="#" @click.prevent="openOptionsPage">configure your API token(s)</a> to see repositories.</p>
       </v-col>
     </v-row>
-
-    <v-divider class="my-2"></v-divider>
-    <v-btn variant="outlined" size="small" block @click="openOptionsPage">
-      Settings
-    </v-btn>
 
     <v-dialog v-model="isAssignGroupDialogVisible" max-width="500px">
       <v-card v-if="selectedRepoForGrouping">
@@ -356,20 +353,23 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.group-drop-zone {
-  /* Optional: Add some visual indication that it's a drop zone */
-  /* border: 2px dashed transparent; */
-  padding: 5px; /* Add some padding so the border doesn't overlap content too much */
-  margin-bottom: 10px; /* Ensure spacing between drop zones */
+.group-container { /* Renamed from group-drop-zone */
+  background-color: #f9f9f9; /* Light background */
+  border: 1px solid #e0e0e0; /* Subtle border */
+  padding: 15px; /* Increased padding within each group section */
+  margin-bottom: 20px; /* Increased bottom margin for better separation */
+  border-radius: 4px; /* Optional: slightly rounded corners */
   transition: background-color 0.2s ease;
 }
-.group-drop-zone:hover {
-  /* background-color: #f0f0f0; /* Light background on hover to indicate droppable area */
+.group-container:hover {
+  /* background-color: #f0f0f0; */ /* Example hover, can be adjusted or removed */
 }
-.group-drop-zone.drag-over { /* You would need to dynamically add this class via JS if desired */
-  /* border-color: #4CAF50; */
-  /* background-color: #e8f5e9; */
+/* Styles for when an item is dragged over a group-container, if needed later
+.group-container.drag-over {
+  border-color: #4CAF50;
+  background-color: #e8f5e9;
 }
+*/
 
 .popup-container {
   width: 100%;
@@ -389,11 +389,18 @@ onMounted(async () => {
   text-decoration: underline;
 }
 .group-header-custom {
-  font-size: 0.95rem; /* Consider Vuetify typography classes if they match */
-  color: #333; /* Or use Vuetify theme colors */
-  margin-bottom: 0.3rem;
-  padding-bottom: 0.2rem;
-  border-bottom: 1px solid #eee; /* v-divider could be an alternative if design allows */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem; /* Spacing below the header row */
+  padding-bottom: 0.3rem;
+  /* border-bottom: 1px solid #ddd; */ /* Border removed as group-container has it */
+}
+
+.group-title-text { /* New class for group titles */
+  font-weight: bold; /* Bolder titles */
+  font-size: 1.1rem; /* Slightly larger titles */
+  color: #333;
 }
 
 /* Card Styling */
@@ -408,25 +415,30 @@ onMounted(async () => {
   transform: translateY(-3px);
 }
 
+:deep(.v-card-item) { /* Added to control padding around title/subtitle block */
+  padding: 10px; /* Reduced padding */
+}
+
 :deep(.v-card-title) {
-  font-size: 1rem; /* Adjust as needed */
+  font-size: 0.9rem; /* Decreased font size */
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-bottom: 4px; /* Reduced padding */
+  padding-bottom: 2px; /* Further reduced padding */
+  line-height: 1.4em; /* Adjust line-height for tighter spacing if needed */
 }
 
 :deep(.v-card-subtitle) {
-  font-size: 0.875rem;
-  padding-bottom: 4px; /* Reduced padding */
+  font-size: 0.8rem; /* Decreased font size */
+  padding-bottom: 2px; /* Further reduced padding */
+  line-height: 1.4em; /* Adjust line-height for tighter spacing if needed */
 }
 
 /* Removed .v-card-text styling as the component is no longer present */
 
 :deep(.v-card-actions) {
-  padding-top: 0; /* Ensure no extra top padding */
-  padding-bottom: 4px; /* Add a little bottom padding for actions */
+  padding: 0 8px 4px 8px; /* More compact: top 0, L/R 8px, bottom 4px */
   min-height: auto; /* Override default min-height if any */
 }
 
