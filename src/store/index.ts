@@ -495,7 +495,6 @@ async function fetchRepositories(options?: { forceRefresh?: boolean; isBackgroun
 
   if (!isBackground) {
       state.value.isLoading = false;
-    }
   }
 }
 
