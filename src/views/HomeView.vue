@@ -43,7 +43,13 @@
     <!-- Display Repositories by Group -->
     <div v-if="!store.isLoading.value && !store.error.value && (store.groups.value.length > 0 || store.repositories.value.length > 0)">
       <!-- Grouped Repositories -->
-      <div v-for="(groupRepos, groupName) in store.repositoriesByGroup.value.grouped" :key="groupName" class="mb-3">
+      <div
+        v-for="(groupRepos, groupName) in store.repositoriesByGroup.value.grouped"
+        :key="groupName"
+        class="mb-3 group-drop-zone"
+        @dragover.prevent
+        @drop="onDrop(getGroupIdByName(groupName), $event)"
+      >
         <v-row align="center" no-gutters class="group-header-custom">
           <v-col>
             <div class="text-subtitle-1">{{ groupName }}</div>
@@ -75,7 +81,7 @@
       <div v-if="store.repositoriesByGroup.value.ungrouped.length > 0" class="mb-3">
         <div class="text-subtitle-1 group-header-custom">Ungrouped</div>
         <v-list density="compact" lines="one">
-          <v-list-item v-for="repo in store.repositoriesByGroup.value.ungrouped" :key="repo.id">
+          <v-list-item v-for="repo in store.repositoriesByGroup.value.ungrouped" :key="repo.id" draggable="true" @dragstart="onDragStart(repo, $event)">
             <v-list-item-title>
               <a :href="repo.url" target="_blank" :title="repo.description || repo.name" class="repo-link-custom">
                 {{ repo.owner }}/{{ repo.name }} ({{ repo.source }})
@@ -117,6 +123,7 @@ const store = useStore();
 const router = useRouter(); // Add this
 const newGroupName = ref('');
 const groupError = ref<string | null>(null);
+const draggedRepoId = ref<string | null>(null); // Added for drag operation
 
 const openOptionsPage = () => {
   router.push('/options');
@@ -131,6 +138,62 @@ const handleCreateGroup = async () => {
     newGroupName.value = '';
   } catch (e: any) {
     groupError.value = e.message;
+  }
+};
+
+const onDrop = async (groupId: string | undefined, event: DragEvent) => {
+  if (event.dataTransfer) {
+    const repoId = event.dataTransfer.getData('text/plain');
+    if (groupId && repoId && repoId !== draggedRepoId.value) { // Ensure it's not a drop on its original (non-group) or same item
+      console.log(`Attempting to drop repo ${repoId} into group ${groupId}`);
+      try {
+        // Check if repo is already in the target group (optional, store might handle this)
+        const group = store.groups.value.find(g => g.id === groupId);
+        if (group && group.repoIds.includes(repoId)) {
+            console.log(`Repo ${repoId} is already in group ${groupId}. No action taken.`);
+            draggedRepoId.value = null; // Clear dragged repo id
+            return;
+        }
+
+        // Find current group of repo, if any, to remove it from there first
+        let currentGroupIdOfDraggedRepo: string | null = null;
+        for (const grp of store.groups.value) {
+            if (grp.repoIds.includes(repoId)) {
+                currentGroupIdOfDraggedRepo = grp.id;
+                break;
+            }
+        }
+        // If the repo is part of another group, remove it first
+        if (currentGroupIdOfDraggedRepo && currentGroupIdOfDraggedRepo !== groupId) {
+            await store.removeRepoFromGroup(currentGroupIdOfDraggedRepo, repoId);
+        }
+
+        await store.addRepoToGroup(groupId, repoId);
+        console.log(`Repo ${repoId} successfully added to group ${groupId}`);
+      } catch (e: any) {
+        console.error(`Error dropping repo ${repoId} into group ${groupId}:`, e);
+        groupError.value = `Error adding repo to group: ${e.message || 'Unknown error'}`;
+      } finally {
+        draggedRepoId.value = null; // Clear dragged repo id
+      }
+    } else if (repoId === draggedRepoId.value) {
+      // console.log("Repo dropped in the same conceptual area or invalid target, clearing dragged ID.");
+      // This case might occur if not dropped on a valid group, or dropped back onto ungrouped (which has no drop handler yet)
+      // For now, just clear. Future: handle dropping on "ungrouped" to remove from a group.
+      draggedRepoId.value = null;
+    } else {
+      console.warn('Drop event occurred without valid groupId or repoId.', { groupId, repoId });
+      draggedRepoId.value = null; // Clear in case of incomplete drag
+    }
+  }
+};
+
+const onDragStart = (repo: Repository, event: DragEvent) => {
+  if (event.dataTransfer) {
+    event.dataTransfer.setData('text/plain', repo.id);
+    draggedRepoId.value = repo.id;
+    // Optional: Visual feedback for dragging
+    // event.dataTransfer.effectAllowed = 'move';
   }
 };
 
@@ -201,6 +264,21 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.group-drop-zone {
+  /* Optional: Add some visual indication that it's a drop zone */
+  /* border: 2px dashed transparent; */
+  padding: 5px; /* Add some padding so the border doesn't overlap content too much */
+  margin-bottom: 10px; /* Ensure spacing between drop zones */
+  transition: background-color 0.2s ease;
+}
+.group-drop-zone:hover {
+  /* background-color: #f0f0f0; /* Light background on hover to indicate droppable area */
+}
+.group-drop-zone.drag-over { /* You would need to dynamically add this class via JS if desired */
+  /* border-color: #4CAF50; */
+  /* background-color: #e8f5e9; */
+}
+
 .popup-container {
   width: 100%;
   height: 100%;
