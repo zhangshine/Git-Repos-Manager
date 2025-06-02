@@ -231,7 +231,7 @@ const hasAnyDisplayableRepos = computed(() => {
 const openOptionsPage = () => {
   router.push('/options');
 };
-const refreshRepos = () => store.fetchRepositories();
+const refreshRepos = () => store.fetchRepositories({ forceRefresh: true });
 
 const handleCreateGroup = async () => {
   if (!newGroupName.value.trim()) return;
@@ -372,12 +372,12 @@ const removeRepoFromGroup = async (repo: Repository) => {
 };
 
 onMounted(async () => {
-  // Store now auto-loads tokens and groups.
-  // Fetch repositories if authenticated.
+  // Store now auto-loads tokens, groups, and attempts to load repos from cache.
+  // Call fetchRepositories to ensure data is fresh or fetched if cache is stale/empty.
+  // forceRefresh: false allows fetchRepositories to use its internal logic
+  // to determine if a network request is actually needed.
   if (store.isAuthenticated.value) {
-    if (store.repositories.value.length === 0) { // Fetch only if not already populated
-        await store.fetchRepositories();
-    }
+    await store.fetchRepositories({ forceRefresh: false });
   }
 });
 

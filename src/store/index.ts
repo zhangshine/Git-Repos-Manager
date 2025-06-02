@@ -5,6 +5,14 @@ import { GitlabService } from '../services/gitlabService'; // For future use
 import { BitbucketService } from '../services/bitbucketService'; // For future use
 import { ApiError } from '../services/apiService';
 
+// --- Cache Constants ---
+const REPOSITORIES_CACHE_KEY = 'cachedRepositories';
+const CACHE_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+const CACHE_REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+
+// --- Interval Management ---
+let periodicRefreshIntervalId: number | null = null;
+
 export interface StoreState {
   githubToken: string | null;
   repositories: Repository[];
@@ -269,6 +277,7 @@ function saveGithubToken(token: string) {
   try {
     localStorage.setItem('githubToken', token);
     state.value.githubToken = token;
+    startPeriodicCacheRefresh(); // Start periodic refresh when token is saved
   } catch (e) {
     console.error('Error saving GitHub token to localStorage:', e);
     throw new Error('Failed to save token to local storage.'); // Re-throw or handle as appropriate
@@ -278,6 +287,7 @@ function saveGithubToken(token: string) {
 // Function to clear GitHub token (now synchronous for localStorage)
 function clearGithubToken() {
   try {
+    stopPeriodicCacheRefresh(); // Stop periodic refresh before clearing token
     localStorage.removeItem('githubToken');
     state.value.githubToken = null;
   } catch (e) {
@@ -286,15 +296,72 @@ function clearGithubToken() {
   }
 }
 
+// --- Periodic Cache Refresh ---
+function startPeriodicCacheRefresh() {
+  if (periodicRefreshIntervalId !== null) {
+    clearInterval(periodicRefreshIntervalId);
+  }
+  if (!state.value.githubToken) { // Do not start if no token
+    return;
+  }
+  periodicRefreshIntervalId = setInterval(() => {
+    // Check for token again inside interval, in case it was cleared by other means
+    if (state.value.githubToken) {
+      console.log('Periodic cache refresh triggered.');
+      // Call fetchRepositories with forceRefresh: false
+      // This allows fetchRepositories to use its own logic to determine if a fetch is needed
+      // (e.g., if current data is stale or forceRefresh was internally decided)
+      fetchRepositories({ forceRefresh: false });
+    } else {
+      // Token was cleared, stop the interval
+      stopPeriodicCacheRefresh();
+    }
+  }, CACHE_REFRESH_INTERVAL_MS);
+  console.log('Periodic cache refresh started.');
+}
+
+function stopPeriodicCacheRefresh() {
+  if (periodicRefreshIntervalId !== null) {
+    clearInterval(periodicRefreshIntervalId);
+    periodicRefreshIntervalId = null;
+    console.log('Periodic cache refresh stopped.');
+  }
+}
+
 // Function to fetch repositories (remains async as it deals with external APIs)
 // For now, focuses on GitHub. Will be expanded for other services.
-async function fetchRepositories() {
+async function fetchRepositories(options?: { forceRefresh?: boolean }) {
+  const forceRefresh = options?.forceRefresh ?? false;
+
+  // Ensure token is available before any attempt to fetch or check cache that relies on it
   if (!state.value.githubToken) {
     state.value.error = 'GitHub token is not set. Please configure it in options.';
-    state.value.repositories = [];
+    state.value.repositories = []; // Clear repositories if no token
     return;
   }
 
+  // If not forcing a refresh and repositories are already loaded, validate existing cache
+  if (!forceRefresh && state.value.repositories.length > 0) {
+    const cachedItem = localStorage.getItem(REPOSITORIES_CACHE_KEY);
+    if (cachedItem) {
+      try {
+        const parsedItem = JSON.parse(cachedItem);
+        if (parsedItem.timestamp && (Date.now() - parsedItem.timestamp) < CACHE_EXPIRY_MS) {
+          // Cache is still valid and matches current state, no need to fetch.
+          // This re-validates that the data in state.value.repositories is indeed the fresh cache.
+          // If loadRepositoriesFromCache put it there, it's good.
+          // If a previous fetchRepositories put it there, it's also good.
+          console.log('Skipping fetch; using recently validated cached repositories.');
+          return;
+        }
+      } catch (e) {
+        // Error parsing cache, or item is malformed. Proceed to fetch.
+        console.warn('Error validating cache during fetch, proceeding to refresh:', e);
+      }
+    }
+  }
+
+  // Proceed with fetching if forceRefresh is true, or no initial repositories, or cache is stale/invalid
   state.value.isLoading = true;
   state.value.error = null;
   try {
@@ -302,6 +369,16 @@ async function fetchRepositories() {
     const githubRepos = await githubService.getRepositories(state.value.githubToken);
     // In future, fetch from GitLab and Bitbucket and combine
     state.value.repositories = [...githubRepos];
+
+    // Cache the fetched repositories
+    try {
+      const cachedData = { timestamp: Date.now(), data: githubRepos };
+      localStorage.setItem(REPOSITORIES_CACHE_KEY, JSON.stringify(cachedData));
+    } catch (cacheError) {
+      console.error('Error saving repositories to cache:', cacheError);
+      // Optionally, inform the user or log this error more formally
+    }
+
   } catch (e: any) {
     console.error('Failed to fetch repositories:', e);
     if (e instanceof ApiError) {
@@ -315,10 +392,48 @@ async function fetchRepositories() {
   }
 }
 
+// Function to load repositories from cache
+function loadRepositoriesFromCache(): boolean {
+  try {
+    const cachedItem = localStorage.getItem(REPOSITORIES_CACHE_KEY);
+    if (!cachedItem) {
+      return false;
+    }
+
+    const cachedData = JSON.parse(cachedItem);
+    if (!cachedData || !cachedData.timestamp || !cachedData.data) {
+      localStorage.removeItem(REPOSITORIES_CACHE_KEY); // Invalid structure
+      return false;
+    }
+
+    if ((Date.now() - cachedData.timestamp) < CACHE_EXPIRY_MS) {
+      state.value.repositories = cachedData.data;
+      state.value.error = null; // Clear any previous error
+      console.log('Repositories loaded from cache.');
+      return true;
+    } else {
+      localStorage.removeItem(REPOSITORIES_CACHE_KEY); // Cache expired
+      console.log('Cached repositories expired and removed.');
+      return false;
+    }
+  } catch (error) {
+    console.error('Error loading repositories from cache:', error);
+    localStorage.removeItem(REPOSITORIES_CACHE_KEY); // Clear cache on error
+    return false;
+  }
+}
+
+
 // Initialize by loading tokens when the store module is first imported.
 // This makes tokens available as soon as the app (popup/options) starts.
 loadTokens(); // already called
 loadGroups(); // Load groups when store initializes
+loadRepositoriesFromCache(); // Attempt to load repositories from cache
+
+// Start periodic refresh if a token is already loaded
+if (state.value.githubToken) {
+  startPeriodicCacheRefresh();
+}
 
 // --- Export Store Functionality ---
 // It's common to export refs directly or wrapped in a function/object.
@@ -357,6 +472,7 @@ export function useStore() {
     addRepoToGroup,
     removeRepoFromGroup,
     getRepoGroupId, // Add this line
+    loadRepositoriesFromCache, // Expose if needed, though typically internal
     // loadGroups, // No need to expose if auto-loaded
     // saveGroups, // Internal use mostly
   };
