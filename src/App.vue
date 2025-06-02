@@ -3,7 +3,7 @@
     <!-- Optional: Navigation for easy testing -->
     <nav style="margin-bottom: 1rem; padding: 0.5rem; background-color: #f0f0f0;">
       <router-link to="/">Home</router-link> |
-      <router-link to="/options">Options</router-link>
+      <router-link to="/options">Settings</router-link>
     </nav>
     <router-view />
   </div>
