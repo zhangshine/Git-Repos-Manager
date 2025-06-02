@@ -209,6 +209,15 @@ loadGroups(); // Load groups when store initializes
 // It's common to export refs directly or wrapped in a function/object.
 // Using readonly for state that shouldn't be mutated directly from components.
 export function useStore() {
+  function getRepoGroupId(repoId: string | number): string | null {
+    for (const group of groups.value) {
+      if (group.repoIds.includes(repoId)) {
+        return group.id;
+      }
+    }
+    return null;
+  }
+
   return {
     // State
     githubToken: readonly(githubToken),
@@ -230,6 +239,7 @@ export function useStore() {
     deleteGroup,
     addRepoToGroup,
     removeRepoFromGroup,
+    getRepoGroupId, // Add this line
     // loadGroups, // No need to expose if auto-loaded
     // saveGroups, // Internal use mostly
   };
