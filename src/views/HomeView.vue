@@ -65,7 +65,6 @@
             <v-card class="d-flex flex-column fill-height">
               <v-card-title>{{ repo.name }}</v-card-title>
               <v-card-subtitle>{{ repo.owner }} / {{ repo.source }}</v-card-subtitle>
-              <v-card-text :class="{ 'text-disabled font-italic': !repo.description }">{{ repo.description || "No description available." }}</v-card-text>
               <v-card-actions class="mt-auto">
                 <v-btn :href="repo.url" target="_blank" variant="text" :title="`View ${repo.name} on ${repo.source}`">View Repo</v-btn>
                 <v-spacer></v-spacer>
@@ -87,7 +86,6 @@
             <v-card draggable="true" @dragstart="onDragStart(repo, $event)" class="d-flex flex-column fill-height">
               <v-card-title>{{ repo.name }}</v-card-title>
               <v-card-subtitle>{{ repo.owner }} / {{ repo.source }}</v-card-subtitle>
-              <v-card-text :class="{ 'text-disabled font-italic': !repo.description }">{{ repo.description || "No description available." }}</v-card-text>
               <v-card-actions class="mt-auto">
                 <v-btn :href="repo.url" target="_blank" variant="text" :title="`View ${repo.name} on ${repo.source}`">View Repo</v-btn>
                 <v-spacer></v-spacer>
@@ -416,36 +414,27 @@ onMounted(async () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-bottom: 8px; /* Add some space below title */
+  padding-bottom: 4px; /* Reduced padding */
 }
 
 :deep(.v-card-subtitle) {
   font-size: 0.875rem;
-  padding-bottom: 8px; /* Add some space below subtitle */
+  padding-bottom: 4px; /* Reduced padding */
 }
 
-:deep(.v-card-text) {
-  font-size: 0.875rem;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 3; /* Limit to 3 lines */
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  /* min-height: 4.4em; /* Approx 3 lines (3 * 1.4em line-height + small buffer) */
-  /* max-height: 4.4em; */ /* To prevent card resizing due to this, ensure card has fixed height or flex grow for this section is limited*/
-  flex-grow: 1; /* Allow text to take available space before actions */
-  padding-bottom: 8px; /* Add some space before actions */
-}
-
-/* Style for "No description available." text is now handled by Vuetify's `text-disabled` and `font-italic` classes directly in the template */
-/* :deep(.v-card-text.no-description-text) {
-  color: #757575; // Vuetify's grey.darken-1 or use var(--v-disabled-color)
-  font-style: italic;
-} */
+/* Removed .v-card-text styling as the component is no longer present */
 
 :deep(.v-card-actions) {
-  padding-top: 0px; /* Remove extra padding if mt-auto is used and space is sufficient */
+  padding-top: 0; /* Ensure no extra top padding */
+  padding-bottom: 4px; /* Add a little bottom padding for actions */
+  min-height: auto; /* Override default min-height if any */
+}
+
+/* Ensure v-card itself doesn't have excessive min-height or padding if not overridden by props */
+.v-card {
+  transition: box-shadow 0.2s ease-out, transform 0.2s ease-out;
+  width: 100%; /* Ensure card takes full width of v-col */
+  /* min-height: 0; /* Override Vuetify's default min-height for v-card if necessary. Test this carefully. */
 }
 
 /* Remove old deep styles for v-list-item */
