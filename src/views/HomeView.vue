@@ -11,9 +11,9 @@
       </v-col>
     </v-row>
 
-    <!-- Search Field -->
-    <v-row class="mb-3">
-      <v-col>
+    <!-- Search and Group Management Row -->
+    <v-row class="mb-3" align="center">
+      <v-col cols="12" md="7">
         <v-text-field
           v-model="searchQueryInput"
           label="Search groups or repositories"
@@ -22,6 +22,28 @@
           hide-details="auto"
           clearable
         ></v-text-field>
+      </v-col>
+      <v-col cols="12" md="5">
+        <v-text-field
+          v-model="newGroupName"
+          label="New group name"
+          density="compact"
+          hide-details="auto"
+          @keyup.enter="handleCreateGroup"
+          class="mb-0"
+        >
+          <template v-slot:append>
+            <v-btn variant="outlined" color="success" @click="handleCreateGroup" :disabled="!newGroupName.trim()">Add Group</v-btn>
+          </template>
+        </v-text-field>
+        <!-- The v-alert for groupError might be better placed outside this specific col or handled globally -->
+      </v-col>
+    </v-row>
+
+    <!-- Group Error Alert - Moved here for better layout -->
+    <v-row v-if="groupError" class="mb-3">
+      <v-col>
+        <v-alert type="error" density="compact">{{ groupError }}</v-alert>
       </v-col>
     </v-row>
 
@@ -36,23 +58,6 @@
       {{ store.error.value }}
       <p>Visit <a href="#" @click.prevent="openOptionsPage" class="text-white font-weight-bold">options</a> to check configuration.</p>
     </v-alert>
-
-    <!-- Group Management -->
-    <div class="mb-3">
-      <v-text-field
-        v-model="newGroupName"
-        label="New group name"
-        density="compact"
-        hide-details="auto"
-        @keyup.enter="handleCreateGroup"
-        class="mb-1"
-      >
-        <template v-slot:append>
-          <v-btn variant="outlined" color="success" @click="handleCreateGroup" :disabled="!newGroupName.trim()">Add Group</v-btn>
-        </template>
-      </v-text-field>
-      <v-alert v-if="groupError" type="error" density="compact" class="mt-1">{{ groupError }}</v-alert>
-    </div>
 
     <!-- No search results message -->
     <v-row v-if="store.searchQuery.value && !hasAnyDisplayableRepos && !store.isLoading.value && !store.error.value" justify="center" class="mt-4">
@@ -372,13 +377,10 @@ const removeRepoFromGroup = async (repo: Repository) => {
 };
 
 onMounted(async () => {
-  // Store now auto-loads tokens, groups, and attempts to load repos from cache.
-  // Call fetchRepositories to ensure data is fresh or fetched if cache is stale/empty.
-  // forceRefresh: false allows fetchRepositories to use its internal logic
-  // to determine if a network request is actually needed.
-  if (store.isAuthenticated.value) {
-    await store.fetchRepositories({ forceRefresh: false });
-  }
+  // Initialize and refresh repositories.
+  // This function handles loading from cache and fetching if necessary.
+  // It also includes a check for authentication (token presence) internally.
+  await store.initializeAndRefreshRepositories();
 });
 
 // Watch local searchQueryInput and update the store
