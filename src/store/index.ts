@@ -14,6 +14,7 @@ const githubToken = ref<string | null>(null);
 const repositories = ref<Repository[]>([]);
 const isLoading = ref<boolean>(false);
 const error = ref<string | null>(null);
+const searchQuery = ref<string>(''); // Added for search
 
 export interface RepoGroup {
   id: string; // e.g., timestamp or UUID
@@ -26,28 +27,140 @@ const groups = ref<RepoGroup[]>([]);
 const isAuthenticated = computed(() => !!githubToken.value); // Expand for other services
 
 const repositoriesByGroup = computed(() => {
-  const grouped: { [key: string]: Repository[] } = {};
-  const ungrouped: Repository[] = [];
-  const allRepoIdsInGroups = new Set<string|number>();
+  const lowerCaseQuery = searchQuery.value.toLowerCase();
 
-  groups.value.forEach(group => {
-    grouped[group.name] = [];
-    group.repoIds.forEach(repoId => {
-      allRepoIdsInGroups.add(repoId);
-      const repo = repositories.value.find(r => r.id === repoId);
-      if (repo) {
-        grouped[group.name].push(repo);
+  if (!lowerCaseQuery) {
+    // Original logic when no search query
+    const grouped: { [key: string]: Repository[] } = {};
+    const ungrouped: Repository[] = [];
+    const allRepoIdsInGroups = new Set<string|number>();
+
+    groups.value.forEach(group => {
+      grouped[group.name] = [];
+      group.repoIds.forEach(repoId => {
+        allRepoIdsInGroups.add(repoId);
+        const repo = repositories.value.find(r => r.id === repoId);
+        if (repo) {
+          grouped[group.name].push(repo);
+        }
+      });
+    });
+
+    repositories.value.forEach(repo => {
+      if (!allRepoIdsInGroups.has(repo.id)) {
+        ungrouped.push(repo);
       }
     });
-  });
+    return { grouped, ungrouped };
+  }
 
-  repositories.value.forEach(repo => {
-    if (!allRepoIdsInGroups.has(repo.id)) {
-      ungrouped.push(repo);
+  // Logic with search query
+  const filteredGrouped: { [key: string]: Repository[] } = {};
+  const filteredUngrouped: Repository[] = [];
+  const addedRepoIds = new Set<string|number>();
+
+  // Filter groups and their repositories
+  groups.value.forEach(group => {
+    const groupNameMatch = group.name.toLowerCase().includes(lowerCaseQuery);
+    let reposForThisGroup: Repository[] = [];
+
+    group.repoIds.forEach(repoId => {
+      const repo = repositories.value.find(r => r.id === repoId);
+      if (repo) {
+        const repoMatch =
+          repo.name.toLowerCase().includes(lowerCaseQuery) ||
+          repo.owner.toLowerCase().includes(lowerCaseQuery) ||
+          (repo.source && repo.source.toLowerCase().includes(lowerCaseQuery));
+
+        if (groupNameMatch || repoMatch) {
+          if (!addedRepoIds.has(repo.id)) { // Ensure repo is added only once to grouped results
+            reposForThisGroup.push(repo);
+            addedRepoIds.add(repo.id);
+          }
+        }
+      }
+    });
+
+    if (reposForThisGroup.length > 0) {
+      filteredGrouped[group.name] = reposForThisGroup;
     }
   });
 
-  return { grouped, ungrouped };
+  // Filter ungrouped repositories
+  repositories.value.forEach(repo => {
+    if (!allRepoIdsInGroups.has(repo.id)) { // Check if it was originally ungrouped
+      if (!addedRepoIds.has(repo.id)) { // And not already added via a group name match that pulled it in
+        const repoMatch =
+          repo.name.toLowerCase().includes(lowerCaseQuery) ||
+          repo.owner.toLowerCase().includes(lowerCaseQuery) ||
+          (repo.source && repo.source.toLowerCase().includes(lowerCaseQuery));
+
+        if (repoMatch) {
+          filteredUngrouped.push(repo);
+          addedRepoIds.add(repo.id); // Not strictly necessary if only iterating truly ungrouped, but good for consistency
+        }
+      }
+    }
+  });
+
+  // After filtering groups, there might be repos that match the query but whose original group does not.
+  // These should appear in "ungrouped" or a special "matching repositories" section if not part of a matched group.
+  // For simplicity now, if a repo matches but its group name doesn't, it won't show up unless it's also ungrouped.
+  // Let's refine: iterate all repos. If a repo matches, decide if it goes to its group (if group also matches or is included because of this repo) or to ungrouped.
+
+  // Refined approach:
+  const finalFilteredGrouped: { [key: string]: Repository[] } = {};
+  const finalFilteredUngrouped: Repository[] = [];
+  const processedRepoIds = new Set<string|number>(); // Tracks repos included in any part of the result
+
+  // Process groups first
+  groups.value.forEach(group => {
+    const groupNameMatch = group.name.toLowerCase().includes(lowerCaseQuery);
+    let reposToAddForThisGroup: Repository[] = [];
+
+    group.repoIds.forEach(repoId => {
+      const repo = repositories.value.find(r => r.id === repoId);
+      if (repo) {
+        const repoMatch =
+          repo.name.toLowerCase().includes(lowerCaseQuery) ||
+          repo.owner.toLowerCase().includes(lowerCaseQuery) ||
+          (repo.source && repo.source.toLowerCase().includes(lowerCaseQuery));
+
+        if (groupNameMatch || repoMatch) { // If group name matches, or repo itself matches
+          if (!processedRepoIds.has(repo.id)) {
+             reposToAddForThisGroup.push(repo);
+             processedRepoIds.add(repo.id);
+          }
+        }
+      }
+    });
+    if (reposToAddForThisGroup.length > 0) {
+      finalFilteredGrouped[group.name] = reposToAddForThisGroup;
+    }
+  });
+
+  // Process all repositories to find matches that are not yet included or are ungrouped
+  repositories.value.forEach(repo => {
+    if (!processedRepoIds.has(repo.id)) { // If not already added via a group
+      const isOriginallyUngrouped = !groups.value.some(g => g.repoIds.includes(repo.id));
+      const repoMatch =
+        repo.name.toLowerCase().includes(lowerCaseQuery) ||
+        repo.owner.toLowerCase().includes(lowerCaseQuery) ||
+        (repo.source && repo.source.toLowerCase().includes(lowerCaseQuery));
+
+      if (repoMatch) { // If the repo itself matches
+         // If it was originally ungrouped, or if its original group didn't match by name (and thus wasn't created)
+         // This logic ensures it appears in ungrouped if its group isn't in finalFilteredGrouped
+         const originalGroup = groups.value.find(g => g.repoIds.includes(repo.id));
+         if (!originalGroup || !finalFilteredGrouped[originalGroup.name]) {
+            finalFilteredUngrouped.push(repo);
+            processedRepoIds.add(repo.id); // Mark as processed
+         }
+      }
+    }
+  });
+
+  return { grouped: finalFilteredGrouped, ungrouped: finalFilteredUngrouped };
 });
 
 
@@ -146,6 +259,11 @@ function removeRepoFromGroup(groupId: string, repoId: string | number) {
 // For now, explicit saveGroups() is used. If auto-save is preferred:
 // watch(groups, saveGroups, { deep: true });
 
+// Action to set the search query
+function setSearchQuery(query: string) {
+  searchQuery.value = query.trim();
+}
+
 // Function to save GitHub token (now synchronous for localStorage)
 function saveGithubToken(token: string) {
   if (!token.trim()) {
@@ -225,6 +343,7 @@ export function useStore() {
     isLoading: readonly(isLoading),
     error: readonly(error),
     groups: readonly(groups), // Expose groups
+    searchQuery: readonly(searchQuery), // Expose search query
 
     // Getters
     isAuthenticated,
@@ -232,6 +351,7 @@ export function useStore() {
 
     // Actions
     loadTokens,
+    setSearchQuery, // Expose setSearchQuery
     saveGithubToken,
     clearGithubToken,
     fetchRepositories,
