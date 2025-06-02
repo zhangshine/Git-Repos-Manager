@@ -69,7 +69,9 @@
               <v-card-actions class="mt-auto">
                 <v-btn :href="repo.url" target="_blank" variant="text" :title="`View ${repo.name} on ${repo.source}`">View Repo</v-btn>
                 <v-spacer></v-spacer>
-                <v-btn size="x-small" variant="outlined" @click="assignToGroupPrompt(repo)" title="Assign to group">+/-</v-btn>
+                <v-btn icon variant="text" size="x-small" @click="removeRepoFromGroup(repo)" title="Remove from group">
+                  <v-icon>mdi-close</v-icon>
+                </v-btn>
               </v-card-actions>
             </v-card>
           </v-col>
@@ -89,7 +91,7 @@
               <v-card-actions class="mt-auto">
                 <v-btn :href="repo.url" target="_blank" variant="text" :title="`View ${repo.name} on ${repo.source}`">View Repo</v-btn>
                 <v-spacer></v-spacer>
-                <v-btn size="x-small" variant="outlined" @click="assignToGroupPrompt(repo)" title="Assign to group">+/-</v-btn>
+                <v-btn size="x-small" color="primary" variant="outlined" @click="openAssignGroupDialog(repo)" title="Add to group">Add to</v-btn>
               </v-card-actions>
             </v-card>
           </v-col>
@@ -112,6 +114,41 @@
     <v-btn variant="outlined" size="small" block @click="openOptionsPage">
       Settings
     </v-btn>
+
+    <v-dialog v-model="isAssignGroupDialogVisible" max-width="500px">
+      <v-card v-if="selectedRepoForGrouping">
+        <v-card-title>
+          Assign "{{ selectedRepoForGrouping.name }}" to Group
+        </v-card-title>
+        <v-card-text>
+          <v-select
+            v-model="selectedGroupIdForDialog"
+            :items="store.groups.value"
+            item-title="name"
+            item-value="id"
+            label="Select Group"
+            placeholder="Choose a group"
+            :disabled="store.groups.value.length === 0"
+            no-data-text="No groups available. Create one first."
+          ></v-select>
+          <div v-if="store.groups.value.length === 0" class="text-caption text-disabled mt-2">
+            You need to create a group first before you can assign a repository.
+          </div>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn text @click="closeAssignGroupDialog">Cancel</v-btn>
+          <v-btn
+            color="primary"
+            variant="elevated"
+            @click="confirmAssignGroup"
+            :disabled="!selectedGroupIdForDialog || !selectedRepoForGrouping"
+          >
+            Assign
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -126,6 +163,9 @@ const router = useRouter(); // Add this
 const newGroupName = ref('');
 const groupError = ref<string | null>(null);
 const draggedRepoId = ref<string | null>(null); // Added for drag operation
+const selectedRepoForGrouping = ref<Repository | null>(null);
+const isAssignGroupDialogVisible = ref(false);
+const selectedGroupIdForDialog = ref<string | null>(null);
 
 const openOptionsPage = () => {
   router.push('/options');
@@ -216,41 +256,55 @@ const confirmDeleteGroup = async (groupId?: string) => {
   }
 };
 
-const assignToGroupPrompt = async (repo: Repository) => {
-  // Find current group of repo
-  let currentGroupId: string | null = null;
-  for (const group of store.groups.value) {
-      if (group.repoIds.includes(repo.id)) {
-          currentGroupId = group.id;
-          break;
-      }
+const openAssignGroupDialog = (repo: Repository) => {
+  selectedRepoForGrouping.value = repo;
+  selectedGroupIdForDialog.value = null; // Reset selection
+  isAssignGroupDialogVisible.value = true;
+  console.log('Open assign group dialog for repo:', repo.name);
+};
+
+const closeAssignGroupDialog = () => {
+  isAssignGroupDialogVisible.value = false;
+  selectedRepoForGrouping.value = null;
+  selectedGroupIdForDialog.value = null;
+};
+
+const confirmAssignGroup = async () => {
+  if (!selectedRepoForGrouping.value || !selectedGroupIdForDialog.value) {
+    console.error('No repository or group selected for assignment.');
+    groupError.value = 'Failed to assign: Repository or group not selected.'; // Show error to user
+    return;
   }
-
-  const groupOptions = store.groups.value.map(g => `"${g.name}" (ID: ${g.id.substring(0,4)})`).join(', ') || 'No groups available.';
-  const newGroupIdOrName = prompt(
-    `Assign "${repo.name}" to group:\nAvailable groups: ${groupOptions}\nEnter group name or ID. Leave empty to ungroup.`,
-    currentGroupId ? store.groups.value.find(g=>g.id === currentGroupId)?.name || '' : ''
-  );
-
-  if (newGroupIdOrName === null) return; // User cancelled
-
   try {
-    // First, remove from current group if any
-    if (currentGroupId) {
-        await store.removeRepoFromGroup(currentGroupId, repo.id);
-    }
+    // Check if repo is already in another group and remove it (store.addRepoToGroup already handles this)
+    // Optional: Add a check here if store.addRepoToGroup doesn't handle it,
+    // or if you want to provide specific feedback to the user about moving the repo.
+    // For now, relying on store.addRepoToGroup's logic.
 
-    // If a new group name/id is provided, add to it
-    if (newGroupIdOrName.trim() !== '') {
-        let targetGroup = store.groups.value.find(g => g.id === newGroupIdOrName.trim() || g.name.toLowerCase() === newGroupIdOrName.trim().toLowerCase());
-        if (targetGroup) {
-            await store.addRepoToGroup(targetGroup.id, repo.id);
-        } else {
-            groupError.value = `Group "${newGroupIdOrName}" not found.`;
-        }
-    }
+    await store.addRepoToGroup(selectedGroupIdForDialog.value, selectedRepoForGrouping.value.id);
+    console.log(`Repository ${selectedRepoForGrouping.value.name} assigned to group ${selectedGroupIdForDialog.value}.`);
+    closeAssignGroupDialog();
   } catch (e: any) {
-    groupError.value = `Error assigning repository: ${e.message}`;
+    console.error('Error assigning repository to group:', e);
+    groupError.value = `Error assigning to group: ${e.message || 'Unknown error'}`;
+    // Keep dialog open if error? Or close and show error? For now, keeps open.
+  }
+};
+
+const removeRepoFromGroup = async (repo: Repository) => {
+  const currentGroupId = store.getRepoGroupId(repo.id); // Use the new store function
+  if (currentGroupId) {
+    try {
+      await store.removeRepoFromGroup(currentGroupId, repo.id);
+      console.log(`Repository ${repo.name} removed from group.`);
+    } catch (e: any) {
+      groupError.value = `Error removing repository from group: ${e.message}`;
+      console.error('Error removing repository from group:', e);
+    }
+  } else {
+    console.warn(`Repository ${repo.name} not found in any group.`);
+    // Potentially set an error message or handle this case as needed
+    groupError.value = `Repository "${repo.name}" doesn't seem to be in a group.`;
   }
 };
 
