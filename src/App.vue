@@ -1,12 +1,17 @@
 <template>
-  <div id="app-container">
-    <!-- Optional: Navigation for easy testing -->
-    <nav style="margin-bottom: 1rem; padding: 0.5rem; background-color: #f0f0f0;">
-      <router-link to="/">Home</router-link> |
-      <router-link to="/options">Settings</router-link>
-    </nav>
-    <router-view />
-  </div>
+  <v-app>
+    <v-app-bar app dense color="primary" dark>
+      <v-toolbar-title>Repo Manager</v-toolbar-title>
+      <v-spacer></v-spacer>
+      <v-btn text to="/">Home</v-btn>
+      <v-btn text to="/options">Settings</v-btn>
+    </v-app-bar>
+    <v-main>
+      <div id="app-container">
+        <router-view />
+      </div>
+    </v-main>
+  </v-app>
 </template>
 
 <script setup lang="ts">
@@ -14,7 +19,7 @@
 </script>
 
 <style>
-/* Add some basic styling if needed */
+/* Styles for #app-container can be kept or adjusted */
 #app-container {
   padding: 10px;
 }
