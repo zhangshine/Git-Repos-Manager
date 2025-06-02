@@ -146,7 +146,7 @@ const handleCreateGroup = async () => {
 const onDrop = async (groupId: string | undefined, event: DragEvent) => {
   if (event.dataTransfer) {
     const repoId = event.dataTransfer.getData('text/plain');
-    if (groupId && repoId && repoId !== draggedRepoId.value) { // Ensure it's not a drop on its original (non-group) or same item
+    if (groupId && repoId) { // Ensure it's not a drop on its original (non-group) or same item
       console.log(`Attempting to drop repo ${repoId} into group ${groupId}`);
       try {
         // Check if repo is already in the target group (optional, store might handle this)
