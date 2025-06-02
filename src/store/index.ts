@@ -5,32 +5,42 @@ import { GitlabService } from '../services/gitlabService'; // For future use
 import { BitbucketService } from '../services/bitbucketService'; // For future use
 import { ApiError } from '../services/apiService';
 
+export interface StoreState {
+  githubToken: string | null;
+  repositories: Repository[];
+  isLoading: boolean;
+  error: string | null;
+  searchQuery: string;
+  groups: RepoGroup[];
+}
+
 // --- State ---
-const githubToken = ref<string | null>(null);
+const state = ref<StoreState>({
+  githubToken: null,
+  repositories: [],
+  isLoading: false,
+  error: null,
+  searchQuery: '',
+  groups: [],
+});
 // Add refs for GitLab and Bitbucket tokens later
 // const gitlabToken = ref<string | null>(null);
 // const bitbucketToken = ref<string | null>(null);
-
-const repositories = ref<Repository[]>([]);
-const isLoading = ref<boolean>(false);
-const error = ref<string | null>(null);
-const searchQuery = ref<string>(''); // Added for search
 
 export interface RepoGroup {
   id: string; // e.g., timestamp or UUID
   name: string;
   repoIds: (string | number)[]; // Store repository IDs
 }
-const groups = ref<RepoGroup[]>([]);
 
 // --- Getters (Computed properties) ---
-const isAuthenticated = computed(() => !!githubToken.value); // Expand for other services
+const isAuthenticated = computed(() => !!state.value.githubToken); // Expand for other services
 
 const repositoriesByGroup = computed(() => {
-  const lowerCaseQuery = searchQuery.value.toLowerCase();
+  const lowerCaseQuery = state.value.searchQuery.toLowerCase();
   const allRepoIdsInGroups = new Set<string|number>();
 
-  groups.value.forEach(group => {
+  state.value.groups.forEach(group => {
     group.repoIds.forEach(repoId => {
       allRepoIdsInGroups.add(repoId);
     });
@@ -42,18 +52,18 @@ const repositoriesByGroup = computed(() => {
     const ungrouped: Repository[] = [];
     // const allRepoIdsInGroups = new Set<string|number>(); // This line is removed
 
-    groups.value.forEach(group => {
+    state.value.groups.forEach(group => {
       grouped[group.name] = [];
       group.repoIds.forEach(repoId => {
         // allRepoIdsInGroups.add(repoId); // This line is removed
-        const repo = repositories.value.find(r => r.id === repoId);
+        const repo = state.value.repositories.find(r => r.id === repoId);
         if (repo) {
           grouped[group.name].push(repo);
         }
       });
     });
 
-    repositories.value.forEach(repo => {
+    state.value.repositories.forEach(repo => {
       if (!allRepoIdsInGroups.has(repo.id)) {
         ungrouped.push(repo);
       }
@@ -67,10 +77,10 @@ const repositoriesByGroup = computed(() => {
   // const addedRepoIds = new Set<string|number>();
 
   // Filter groups and their repositories
-  // groups.value.forEach(group => { // This logic block is replaced by "Refined approach"
+  // state.value.groups.forEach(group => { // This logic block is replaced by "Refined approach"
 
   // This entire block related to filteredGrouped, filteredUngrouped, addedRepoIds,
-  // and the first pass of groups.value.forEach is part of the older search logic
+  // and the first pass of state.value.groups.forEach is part of the older search logic
   // that was already superseded by the "Refined approach" block below.
   // The key is that allRepoIdsInGroups is now populated *before* this `if/else`.
 
@@ -86,13 +96,13 @@ const repositoriesByGroup = computed(() => {
   // is the one we populated at the top of the computed property.
 
   // Let's ensure the "Refined approach" part correctly picks up the new allRepoIdsInGroups.
-  // The line `const isOriginallyUngrouped = !groups.value.some(g => g.repoIds.includes(repo.id));`
+  // The line `const isOriginallyUngrouped = !state.value.groups.some(g => g.repoIds.includes(repo.id));`
   // in the refined approach is actually more accurate for determining "originally ungrouped"
   // than relying on an `allRepoIdsInGroups` populated only during the no-search case.
   // However, the subtask is specifically to populate `allRepoIdsInGroups` for all repos in groups,
   // irrespective of search. This set *is* used in the `if (!lowerCaseQuery)` block.
   // And it is also used in one place in the original search logic before the "Refined approach":
-  // `repositories.value.forEach(repo => { if (!allRepoIdsInGroups.has(repo.id)) { ... } });`
+  // `state.value.repositories.forEach(repo => { if (!allRepoIdsInGroups.has(repo.id)) { ... } });`
   // This specific line *will* be affected by the change and use the new `allRepoIdsInGroups`.
 
   // Refined approach:
@@ -101,12 +111,12 @@ const repositoriesByGroup = computed(() => {
   const processedRepoIds = new Set<string|number>(); // Tracks repos included in any part of the result
 
   // Process groups first
-  groups.value.forEach(group => {
+  state.value.groups.forEach(group => {
     const groupNameMatch = group.name.toLowerCase().includes(lowerCaseQuery);
     let reposToAddForThisGroup: Repository[] = [];
 
     group.repoIds.forEach(repoId => {
-      const repo = repositories.value.find(r => r.id === repoId);
+      const repo = state.value.repositories.find(r => r.id === repoId);
       if (repo) {
         const repoMatch =
           repo.name.toLowerCase().includes(lowerCaseQuery) ||
@@ -127,9 +137,9 @@ const repositoriesByGroup = computed(() => {
   });
 
   // Process all repositories to find matches that are not yet included or are ungrouped
-  repositories.value.forEach(repo => {
+  state.value.repositories.forEach(repo => {
     if (!processedRepoIds.has(repo.id)) { // If not already added via a group
-      const isOriginallyUngrouped = !groups.value.some(g => g.repoIds.includes(repo.id));
+      const isOriginallyUngrouped = !state.value.groups.some(g => g.repoIds.includes(repo.id));
       const repoMatch =
         repo.name.toLowerCase().includes(lowerCaseQuery) ||
         repo.owner.toLowerCase().includes(lowerCaseQuery) ||
@@ -138,7 +148,7 @@ const repositoriesByGroup = computed(() => {
       if (repoMatch) { // If the repo itself matches
          // If it was originally ungrouped, or if its original group didn't match by name (and thus wasn't created)
          // This logic ensures it appears in ungrouped if its group isn't in finalFilteredGrouped
-         const originalGroup = groups.value.find(g => g.repoIds.includes(repo.id));
+         const originalGroup = state.value.groups.find(g => g.repoIds.includes(repo.id));
          if (!originalGroup || !finalFilteredGrouped[originalGroup.name]) {
             finalFilteredUngrouped.push(repo);
             processedRepoIds.add(repo.id); // Mark as processed
@@ -158,12 +168,12 @@ function loadTokens() {
   try {
     const storedGithubToken = localStorage.getItem('githubToken');
     if (storedGithubToken) {
-      githubToken.value = storedGithubToken;
+      state.value.githubToken = storedGithubToken;
     }
     // Load other tokens similarly
   } catch (e) {
     console.error('Error loading tokens from localStorage:', e);
-    error.value = 'Could not load token configuration.';
+    state.value.error = 'Could not load token configuration.';
   }
 }
 
@@ -173,23 +183,23 @@ function loadGroups() {
     if (storedGroups) {
       const parsedGroups = JSON.parse(storedGroups);
       if (Array.isArray(parsedGroups)) {
-        groups.value = parsedGroups;
+        state.value.groups = parsedGroups;
       } else {
-        groups.value = [];
+        state.value.groups = [];
         console.warn('Loaded "repositoryGroups" from localStorage, but it was not an array. Initializing to empty array. Value was:', parsedGroups);
       }
     } else {
-      groups.value = []; // Initialize if nothing in storage
+      state.value.groups = []; // Initialize if nothing in storage
     }
   } catch (e) {
     console.error('Error loading groups from localStorage:', e);
-    groups.value = []; // Also ensure groups is an array in case of an error during storage access or parsing
+    state.value.groups = []; // Also ensure groups is an array in case of an error during storage access or parsing
   }
 }
 
 function saveGroups() {
   try {
-    localStorage.setItem('repositoryGroups', JSON.stringify(groups.value));
+    localStorage.setItem('repositoryGroups', JSON.stringify(state.value.groups));
   } catch (e) {
     console.error('Error saving groups to localStorage:', e);
     // Optionally set an error state for groups
@@ -199,7 +209,7 @@ function saveGroups() {
 // Modified to be synchronous as saveGroups is now sync
 function addGroup(name: string) {
   if (!name.trim()) throw new Error('Group name cannot be empty.');
-  const existingGroup = groups.value.find(g => g.name.toLowerCase() === name.trim().toLowerCase());
+  const existingGroup = state.value.groups.find(g => g.name.toLowerCase() === name.trim().toLowerCase());
   if (existingGroup) throw new Error(`Group '${name}' already exists.`);
 
   const newGroup: RepoGroup = {
@@ -207,22 +217,22 @@ function addGroup(name: string) {
     name: name.trim(),
     repoIds: [],
   };
-  groups.value.push(newGroup);
+  state.value.groups.push(newGroup);
   saveGroups(); // Now synchronous
 }
 
 // Modified to be synchronous
 function deleteGroup(groupId: string) {
-  groups.value = groups.value.filter(g => g.id !== groupId);
+  state.value.groups = state.value.groups.filter(g => g.id !== groupId);
   saveGroups(); // Now synchronous
 }
 
 // Modified to be synchronous
 function addRepoToGroup(groupId: string, repoId: string | number) {
-  const group = groups.value.find(g => g.id === groupId);
+  const group = state.value.groups.find(g => g.id === groupId);
   if (group && !group.repoIds.includes(repoId)) {
     // Remove from other groups first to ensure a repo is in at most one group
-    groups.value.forEach(g => {
+    state.value.groups.forEach(g => {
         if (g.id !== groupId) {
             g.repoIds = g.repoIds.filter(id => id !== repoId);
         }
@@ -234,7 +244,7 @@ function addRepoToGroup(groupId: string, repoId: string | number) {
 
 // Modified to be synchronous
 function removeRepoFromGroup(groupId: string, repoId: string | number) {
-  const group = groups.value.find(g => g.id === groupId);
+  const group = state.value.groups.find(g => g.id === groupId);
   if (group) {
     group.repoIds = group.repoIds.filter(id => id !== repoId);
     saveGroups(); // Now synchronous
@@ -244,11 +254,11 @@ function removeRepoFromGroup(groupId: string, repoId: string | number) {
 // Watch for changes in groups and save them.
 // This provides a more robust way to persist group changes automatically.
 // For now, explicit saveGroups() is used. If auto-save is preferred:
-// watch(groups, saveGroups, { deep: true });
+// watch(state.value.groups, saveGroups, { deep: true });
 
 // Action to set the search query
 function setSearchQuery(query: string) {
-  searchQuery.value = query.trim();
+  state.value.searchQuery = query.trim();
 }
 
 // Function to save GitHub token (now synchronous for localStorage)
@@ -258,7 +268,7 @@ function saveGithubToken(token: string) {
   }
   try {
     localStorage.setItem('githubToken', token);
-    githubToken.value = token;
+    state.value.githubToken = token;
   } catch (e) {
     console.error('Error saving GitHub token to localStorage:', e);
     throw new Error('Failed to save token to local storage.'); // Re-throw or handle as appropriate
@@ -269,7 +279,7 @@ function saveGithubToken(token: string) {
 function clearGithubToken() {
   try {
     localStorage.removeItem('githubToken');
-    githubToken.value = null;
+    state.value.githubToken = null;
   } catch (e) {
     console.error('Error removing GitHub token from localStorage:', e);
     throw new Error('Failed to clear token from local storage.'); // Re-throw or handle
@@ -279,29 +289,29 @@ function clearGithubToken() {
 // Function to fetch repositories (remains async as it deals with external APIs)
 // For now, focuses on GitHub. Will be expanded for other services.
 async function fetchRepositories() {
-  if (!githubToken.value) {
-    error.value = 'GitHub token is not set. Please configure it in options.';
-    repositories.value = [];
+  if (!state.value.githubToken) {
+    state.value.error = 'GitHub token is not set. Please configure it in options.';
+    state.value.repositories = [];
     return;
   }
 
-  isLoading.value = true;
-  error.value = null;
+  state.value.isLoading = true;
+  state.value.error = null;
   try {
     const githubService = new GithubService();
-    const githubRepos = await githubService.getRepositories(githubToken.value);
+    const githubRepos = await githubService.getRepositories(state.value.githubToken);
     // In future, fetch from GitLab and Bitbucket and combine
-    repositories.value = [...githubRepos];
+    state.value.repositories = [...githubRepos];
   } catch (e: any) {
     console.error('Failed to fetch repositories:', e);
     if (e instanceof ApiError) {
-      error.value = `API Error: ${e.message}`;
+      state.value.error = `API Error: ${e.message}`;
     } else {
-      error.value = 'An unexpected error occurred while fetching repositories.';
+      state.value.error = 'An unexpected error occurred while fetching repositories.';
     }
-    repositories.value = []; // Clear on error
+    state.value.repositories = []; // Clear on error
   } finally {
-    isLoading.value = false;
+    state.value.isLoading = false;
   }
 }
 
@@ -315,7 +325,7 @@ loadGroups(); // Load groups when store initializes
 // Using readonly for state that shouldn't be mutated directly from components.
 export function useStore() {
   function getRepoGroupId(repoId: string | number): string | null {
-    for (const group of groups.value) {
+    for (const group of state.value.groups) {
       if (group.repoIds.includes(repoId)) {
         return group.id;
       }
@@ -325,12 +335,12 @@ export function useStore() {
 
   return {
     // State
-    githubToken: readonly(githubToken),
-    repositories: readonly(repositories),
-    isLoading: readonly(isLoading),
-    error: readonly(error),
-    groups: readonly(groups), // Expose groups
-    searchQuery: readonly(searchQuery), // Expose search query
+    githubToken: readonly(computed(() => state.value.githubToken)),
+    repositories: readonly(computed(() => state.value.repositories)),
+    isLoading: readonly(computed(() => state.value.isLoading)),
+    error: readonly(computed(() => state.value.error)),
+    groups: readonly(computed(() => state.value.groups)), // Expose groups
+    searchQuery: readonly(computed(() => state.value.searchQuery)), // Expose search query
 
     // Getters
     isAuthenticated,
