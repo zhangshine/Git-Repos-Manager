@@ -11,6 +11,20 @@
       </v-col>
     </v-row>
 
+    <!-- Search Field -->
+    <v-row class="mb-3">
+      <v-col>
+        <v-text-field
+          v-model="searchQueryInput"
+          label="Search groups or repositories"
+          prepend-inner-icon="mdi-magnify"
+          density="compact"
+          hide-details="auto"
+          clearable
+        ></v-text-field>
+      </v-col>
+    </v-row>
+
     <!-- Loading and Error States -->
     <v-row v-if="store.isLoading.value && store.repositories.value.length === 0" justify="center" class="mt-4">
       <v-col class="text-center">
@@ -40,8 +54,16 @@
       <v-alert v-if="groupError" type="error" density="compact" class="mt-1">{{ groupError }}</v-alert>
     </div>
 
+    <!-- No search results message -->
+    <v-row v-if="store.searchQuery.value && !hasAnyDisplayableRepos && !store.isLoading.value && !store.error.value" justify="center" class="mt-4">
+      <v-col class="text-center">
+        <p>No groups or repositories match your search for "{{ store.searchQuery.value }}".</p>
+      </v-col>
+    </v-row>
+
     <!-- Display Repositories by Group -->
-    <div v-if="!store.isLoading.value && !store.error.value && (store.groups.value.length > 0 || store.repositories.value.length > 0)">
+    <!-- Updated v-if to use hasAnyDisplayableRepos -->
+    <div v-if="!store.isLoading.value && !store.error.value && hasAnyDisplayableRepos">
       <!-- Grouped Repositories -->
       <div
         v-for="(groupRepos, groupName) in store.repositoriesByGroup.value.grouped"
@@ -62,8 +84,8 @@
         </v-row>
         <v-row v-if="groupRepos.length > 0">
           <v-col v-for="repo in groupRepos" :key="repo.id" cols="12" sm="4" md="3" lg="2">
-            <v-card class="d-flex flex-column fill-height" style="position: relative;">
-              <v-btn icon variant="text" size="x-small" @click="removeRepoFromGroup(repo)" title="Remove from group" style="position: absolute; top: 8px; right: 8px; z-index: 1;">
+            <v-card class="d-flex flex-column fill-height repo-card" style="position: relative;">
+              <v-btn icon variant="text" size="x-small" @click="removeRepoFromGroup(repo)" title="Remove from group" class="remove-repo-btn" style="position: absolute; top: 8px; right: 8px; z-index: 1;">
                 <v-icon>mdi-close</v-icon>
               </v-btn>
               <v-card-title>
@@ -99,7 +121,8 @@
       </div>
     </div>
 
-    <v-row v-if="!store.isLoading.value && !store.error.value && store.repositories.value.length === 0 && store.groups.value.length === 0 && store.isAuthenticated.value" justify="center" class="mt-4">
+    <!-- Updated v-if for initial empty state (no search, no results, but authenticated) -->
+    <v-row v-if="!store.searchQuery.value && !hasAnyDisplayableRepos && !store.isLoading.value && !store.error.value && store.isAuthenticated.value" justify="center" class="mt-4">
       <v-col class="text-center">
         <p>No repositories found. Try refreshing.</p>
       </v-col>
@@ -173,13 +196,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue'; // Added watch
 import { useRouter } from 'vue-router'; // Add this import
 import { useStore } from '../store';
 import type { Repository, RepoGroup } from '../store'; // Assuming RepoGroup is exported from store or defined locally
 
 const store = useStore();
 const router = useRouter(); // Add this
+const searchQueryInput = ref(store.searchQuery.value); // Initialize with store value
 const newGroupName = ref('');
 const groupError = ref<string | null>(null);
 const draggedRepoId = ref<string | null>(null); // Added for drag operation
@@ -196,6 +220,12 @@ const filteredGroups = computed(() => {
   return store.groups.value.filter(group =>
     group.name.toLowerCase().includes(groupSearchQuery.value.toLowerCase())
   );
+});
+
+// Computed property to check if there are any results to display (either grouped or ungrouped)
+const hasAnyDisplayableRepos = computed(() => {
+  const { grouped, ungrouped } = store.repositoriesByGroup.value;
+  return Object.keys(grouped).length > 0 || ungrouped.length > 0;
 });
 
 const openOptionsPage = () => {
@@ -350,6 +380,18 @@ onMounted(async () => {
     }
   }
 });
+
+// Watch local searchQueryInput and update the store
+watch(searchQueryInput, (newValue) => {
+  store.setSearchQuery(newValue);
+});
+
+// Watch store's searchQuery and update local searchQueryInput if different
+watch(() => store.searchQuery.value, (newQuery) => {
+  if (searchQueryInput.value !== newQuery) {
+    searchQueryInput.value = newQuery;
+  }
+});
 </script>
 
 <style scoped>
@@ -462,4 +504,12 @@ onMounted(async () => {
 }
 
 /* Remove old deep styles for v-list-item */
+
+.remove-repo-btn {
+  visibility: hidden; /* Initially hidden */
+}
+
+.repo-card:hover .remove-repo-btn {
+  visibility: visible; /* Visible on hover */
+}
 </style>
