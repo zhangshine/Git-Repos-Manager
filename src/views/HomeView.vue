@@ -62,16 +62,15 @@
         </v-row>
         <v-row v-if="groupRepos.length > 0">
           <v-col v-for="repo in groupRepos" :key="repo.id" cols="12" sm="4" md="3" lg="2">
-            <v-card class="d-flex flex-column fill-height">
-              <v-card-title>{{ repo.name }}</v-card-title>
+            <v-card class="d-flex flex-column fill-height" style="position: relative;">
+              <v-btn icon variant="text" size="x-small" @click="removeRepoFromGroup(repo)" title="Remove from group" style="position: absolute; top: 8px; right: 8px; z-index: 1;">
+                <v-icon>mdi-close</v-icon>
+              </v-btn>
+              <v-card-title>
+                <a :href="repo.url" target="_blank" class="repo-name-link" :title="`View ${repo.name} on ${repo.source}`">{{ repo.name }}</a>
+              </v-card-title>
               <v-card-subtitle>{{ repo.owner }} / {{ repo.source }}</v-card-subtitle>
-              <v-card-actions class="mt-auto">
-                <v-btn :href="repo.url" target="_blank" variant="text" :title="`View ${repo.name} on ${repo.source}`">View Repo</v-btn>
-                <v-spacer></v-spacer>
-                <v-btn icon variant="text" size="x-small" @click="removeRepoFromGroup(repo)" title="Remove from group">
-                  <v-icon>mdi-close</v-icon>
-                </v-btn>
-              </v-card-actions>
+              <!-- v-card-actions removed as it's empty after button removal/relocation -->
             </v-card>
           </v-col>
         </v-row>
@@ -86,10 +85,11 @@
         <v-row>
           <v-col v-for="repo in store.repositoriesByGroup.value.ungrouped" :key="repo.id" cols="12" sm="4" md="3" lg="2">
             <v-card draggable="true" @dragstart="onDragStart(repo, $event)" class="d-flex flex-column fill-height">
-              <v-card-title>{{ repo.name }}</v-card-title>
+              <v-card-title>
+                <a :href="repo.url" target="_blank" class="repo-name-link" :title="`View ${repo.name} on ${repo.source}`">{{ repo.name }}</a>
+              </v-card-title>
               <v-card-subtitle>{{ repo.owner }} / {{ repo.source }}</v-card-subtitle>
               <v-card-actions class="mt-auto">
-                <v-btn :href="repo.url" target="_blank" variant="text" :title="`View ${repo.name} on ${repo.source}`">View Repo</v-btn>
                 <v-spacer></v-spacer>
                 <v-btn size="x-small" color="primary" variant="outlined" @click="openAssignGroupDialog(repo)" title="Add to group">Add to</v-btn>
               </v-card-actions>
@@ -388,6 +388,18 @@ onMounted(async () => {
 .repo-link-custom:hover {
   text-decoration: underline;
 }
+
+/* Style for the new repo name link in v-card-title */
+.repo-name-link {
+  color: #1976D2; /* Vuetify primary blue */
+  text-decoration: none;
+  font-weight: 500; /* Match card title weight */
+}
+.repo-name-link:hover {
+  text-decoration: underline;
+  color: #1565C0; /* Darker shade on hover */
+}
+
 .group-header-custom {
   display: flex;
   justify-content: space-between;
