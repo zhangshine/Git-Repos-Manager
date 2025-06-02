@@ -28,17 +28,24 @@ const isAuthenticated = computed(() => !!githubToken.value); // Expand for other
 
 const repositoriesByGroup = computed(() => {
   const lowerCaseQuery = searchQuery.value.toLowerCase();
+  const allRepoIdsInGroups = new Set<string|number>();
+
+  groups.value.forEach(group => {
+    group.repoIds.forEach(repoId => {
+      allRepoIdsInGroups.add(repoId);
+    });
+  });
 
   if (!lowerCaseQuery) {
     // Original logic when no search query
     const grouped: { [key: string]: Repository[] } = {};
     const ungrouped: Repository[] = [];
-    const allRepoIdsInGroups = new Set<string|number>();
+    // const allRepoIdsInGroups = new Set<string|number>(); // This line is removed
 
     groups.value.forEach(group => {
       grouped[group.name] = [];
       group.repoIds.forEach(repoId => {
-        allRepoIdsInGroups.add(repoId);
+        // allRepoIdsInGroups.add(repoId); // This line is removed
         const repo = repositories.value.find(r => r.id === repoId);
         if (repo) {
           grouped[group.name].push(repo);
@@ -55,58 +62,38 @@ const repositoriesByGroup = computed(() => {
   }
 
   // Logic with search query
-  const filteredGrouped: { [key: string]: Repository[] } = {};
-  const filteredUngrouped: Repository[] = [];
-  const addedRepoIds = new Set<string|number>();
+  // const filteredGrouped: { [key: string]: Repository[] } = {}; // This logic block is replaced by "Refined approach"
+  // const filteredUngrouped: Repository[] = [];
+  // const addedRepoIds = new Set<string|number>();
 
   // Filter groups and their repositories
-  groups.value.forEach(group => {
-    const groupNameMatch = group.name.toLowerCase().includes(lowerCaseQuery);
-    let reposForThisGroup: Repository[] = [];
+  // groups.value.forEach(group => { // This logic block is replaced by "Refined approach"
 
-    group.repoIds.forEach(repoId => {
-      const repo = repositories.value.find(r => r.id === repoId);
-      if (repo) {
-        const repoMatch =
-          repo.name.toLowerCase().includes(lowerCaseQuery) ||
-          repo.owner.toLowerCase().includes(lowerCaseQuery) ||
-          (repo.source && repo.source.toLowerCase().includes(lowerCaseQuery));
+  // This entire block related to filteredGrouped, filteredUngrouped, addedRepoIds,
+  // and the first pass of groups.value.forEach is part of the older search logic
+  // that was already superseded by the "Refined approach" block below.
+  // The key is that allRepoIdsInGroups is now populated *before* this `if/else`.
 
-        if (groupNameMatch || repoMatch) {
-          if (!addedRepoIds.has(repo.id)) { // Ensure repo is added only once to grouped results
-            reposForThisGroup.push(repo);
-            addedRepoIds.add(repo.id);
-          }
-        }
-      }
-    });
+  // The "Refined approach" below should correctly use the pre-populated allRepoIdsInGroups.
+  // We are mainly concerned with moving the allRepoIdsInGroups population.
+  // The search logic itself (refined approach) should remain as is, but will now benefit
+  // from the globally populated allRepoIdsInGroups.
 
-    if (reposForThisGroup.length > 0) {
-      filteredGrouped[group.name] = reposForThisGroup;
-    }
-  });
+  // The original tool description asked to ensure existing logic functions correctly.
+  // The `if (!lowerCaseQuery)` block is modified above.
+  // The `else` block (search query) already has its own refined logic.
+  // We need to ensure that the `allRepoIdsInGroups` used in the "Refined approach"
+  // is the one we populated at the top of the computed property.
 
-  // Filter ungrouped repositories
-  repositories.value.forEach(repo => {
-    if (!allRepoIdsInGroups.has(repo.id)) { // Check if it was originally ungrouped
-      if (!addedRepoIds.has(repo.id)) { // And not already added via a group name match that pulled it in
-        const repoMatch =
-          repo.name.toLowerCase().includes(lowerCaseQuery) ||
-          repo.owner.toLowerCase().includes(lowerCaseQuery) ||
-          (repo.source && repo.source.toLowerCase().includes(lowerCaseQuery));
-
-        if (repoMatch) {
-          filteredUngrouped.push(repo);
-          addedRepoIds.add(repo.id); // Not strictly necessary if only iterating truly ungrouped, but good for consistency
-        }
-      }
-    }
-  });
-
-  // After filtering groups, there might be repos that match the query but whose original group does not.
-  // These should appear in "ungrouped" or a special "matching repositories" section if not part of a matched group.
-  // For simplicity now, if a repo matches but its group name doesn't, it won't show up unless it's also ungrouped.
-  // Let's refine: iterate all repos. If a repo matches, decide if it goes to its group (if group also matches or is included because of this repo) or to ungrouped.
+  // Let's ensure the "Refined approach" part correctly picks up the new allRepoIdsInGroups.
+  // The line `const isOriginallyUngrouped = !groups.value.some(g => g.repoIds.includes(repo.id));`
+  // in the refined approach is actually more accurate for determining "originally ungrouped"
+  // than relying on an `allRepoIdsInGroups` populated only during the no-search case.
+  // However, the subtask is specifically to populate `allRepoIdsInGroups` for all repos in groups,
+  // irrespective of search. This set *is* used in the `if (!lowerCaseQuery)` block.
+  // And it is also used in one place in the original search logic before the "Refined approach":
+  // `repositories.value.forEach(repo => { if (!allRepoIdsInGroups.has(repo.id)) { ... } });`
+  // This specific line *will* be affected by the change and use the new `allRepoIdsInGroups`.
 
   // Refined approach:
   const finalFilteredGrouped: { [key: string]: Repository[] } = {};
