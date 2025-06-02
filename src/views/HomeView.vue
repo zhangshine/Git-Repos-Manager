@@ -60,38 +60,40 @@
             </v-btn>
           </v-col>
         </v-row>
-        <v-list density="compact" lines="one">
-          <v-list-item v-for="repo in groupRepos" :key="repo.id">
-            <v-list-item-title>
-              <a :href="repo.url" target="_blank" :title="repo.description || repo.name" class="repo-link-custom">
-                {{ repo.owner }}/{{ repo.name }} ({{ repo.source }})
-              </a>
-            </v-list-item-title>
-            <template v-slot:append>
-              <v-btn size="x-small" variant="outlined" @click="assignToGroupPrompt(repo)" title="Assign to group">+/-</v-btn>
-            </template>
-          </v-list-item>
-          <v-list-item v-if="groupRepos.length === 0">
-            <v-list-item-title class="text-caption text-disabled">No repositories in this group.</v-list-item-title>
-          </v-list-item>
-        </v-list>
+        <v-row v-if="groupRepos.length > 0">
+          <v-col v-for="repo in groupRepos" :key="repo.id" cols="12" sm="6" md="4" lg="3">
+            <v-card class="d-flex flex-column fill-height">
+              <v-card-title>{{ repo.name }}</v-card-title>
+              <v-card-subtitle>{{ repo.owner }} / {{ repo.source }}</v-card-subtitle>
+              <v-card-text :class="{ 'text-disabled font-italic': !repo.description }">{{ repo.description || "No description available." }}</v-card-text>
+              <v-card-actions class="mt-auto">
+                <v-btn :href="repo.url" target="_blank" variant="text" :title="`View ${repo.name} on ${repo.source}`">View Repo</v-btn>
+                <v-spacer></v-spacer>
+                <v-btn size="x-small" variant="outlined" @click="assignToGroupPrompt(repo)" title="Assign to group">+/-</v-btn>
+              </v-card-actions>
+            </v-card>
+          </v-col>
+        </v-row>
+        <div v-else class="text-caption text-disabled pa-2">No repositories in this group.</div>
       </div>
 
       <!-- Ungrouped Repositories -->
       <div v-if="store.repositoriesByGroup.value.ungrouped.length > 0" class="mb-3">
         <div class="text-subtitle-1 group-header-custom">Ungrouped</div>
-        <v-list density="compact" lines="one">
-          <v-list-item v-for="repo in store.repositoriesByGroup.value.ungrouped" :key="repo.id" draggable="true" @dragstart="onDragStart(repo, $event)">
-            <v-list-item-title>
-              <a :href="repo.url" target="_blank" :title="repo.description || repo.name" class="repo-link-custom">
-                {{ repo.owner }}/{{ repo.name }} ({{ repo.source }})
-              </a>
-            </v-list-item-title>
-            <template v-slot:append>
-              <v-btn size="x-small" variant="outlined" @click="assignToGroupPrompt(repo)" title="Assign to group">+/-</v-btn>
-            </template>
-          </v-list-item>
-        </v-list>
+        <v-row>
+          <v-col v-for="repo in store.repositoriesByGroup.value.ungrouped" :key="repo.id" cols="12" sm="6" md="4" lg="3">
+            <v-card draggable="true" @dragstart="onDragStart(repo, $event)" class="d-flex flex-column fill-height">
+              <v-card-title>{{ repo.name }}</v-card-title>
+              <v-card-subtitle>{{ repo.owner }} / {{ repo.source }}</v-card-subtitle>
+              <v-card-text :class="{ 'text-disabled font-italic': !repo.description }">{{ repo.description || "No description available." }}</v-card-text>
+              <v-card-actions class="mt-auto">
+                <v-btn :href="repo.url" target="_blank" variant="text" :title="`View ${repo.name} on ${repo.source}`">View Repo</v-btn>
+                <v-spacer></v-spacer>
+                <v-btn size="x-small" variant="outlined" @click="assignToGroupPrompt(repo)" title="Assign to group">+/-</v-btn>
+              </v-card-actions>
+            </v-card>
+          </v-col>
+        </v-row>
       </div>
     </div>
 
@@ -304,13 +306,55 @@ onMounted(async () => {
   border-bottom: 1px solid #eee; /* v-divider could be an alternative if design allows */
 }
 
-/* Ensure v-list-item content doesn't cause overflow with the button */
-:deep(.v-list-item__content) {
-  overflow: hidden;
+/* Card Styling */
+.v-card {
+  transition: box-shadow 0.2s ease-out, transform 0.2s ease-out;
+  width: 100%; /* Ensure card takes full width of v-col */
+  /* height: 100%; /* d-flex and fill-height class should handle this */
 }
-:deep(.v-list-item-title) {
+
+.v-card:hover {
+  box-shadow: 0 6px 12px rgba(0,0,0,0.1), 0 3px 6px rgba(0,0,0,0.08); /* Adjusted shadow for a bit more depth */
+  transform: translateY(-3px);
+}
+
+:deep(.v-card-title) {
+  font-size: 1rem; /* Adjust as needed */
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding-bottom: 8px; /* Add some space below title */
 }
+
+:deep(.v-card-subtitle) {
+  font-size: 0.875rem;
+  padding-bottom: 8px; /* Add some space below subtitle */
+}
+
+:deep(.v-card-text) {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3; /* Limit to 3 lines */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* min-height: 4.4em; /* Approx 3 lines (3 * 1.4em line-height + small buffer) */
+  /* max-height: 4.4em; */ /* To prevent card resizing due to this, ensure card has fixed height or flex grow for this section is limited*/
+  flex-grow: 1; /* Allow text to take available space before actions */
+  padding-bottom: 8px; /* Add some space before actions */
+}
+
+/* Style for "No description available." text is now handled by Vuetify's `text-disabled` and `font-italic` classes directly in the template */
+/* :deep(.v-card-text.no-description-text) {
+  color: #757575; // Vuetify's grey.darken-1 or use var(--v-disabled-color)
+  font-style: italic;
+} */
+
+:deep(.v-card-actions) {
+  padding-top: 0px; /* Remove extra padding if mt-auto is used and space is sufficient */
+}
+
+/* Remove old deep styles for v-list-item */
 </style>
