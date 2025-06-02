@@ -121,19 +121,44 @@
           Assign "{{ selectedRepoForGrouping.name }}" to Group
         </v-card-title>
         <v-card-text>
-          <v-select
-            v-model="selectedGroupIdForDialog"
-            :items="store.groups.value"
-            item-title="name"
-            item-value="id"
-            label="Select Group"
-            placeholder="Choose a group"
-            :disabled="store.groups.value.length === 0"
-            no-data-text="No groups available. Create one first."
-          ></v-select>
-          <div v-if="store.groups.value.length === 0" class="text-caption text-disabled mt-2">
-            You need to create a group first before you can assign a repository.
+          <v-text-field
+            v-model="groupSearchQuery"
+            label="Search Group"
+            density="compact"
+            hide-details
+            class="mb-3"
+          ></v-text-field>
+          <div v-if="store.groups.value.length === 0" class="text-caption text-disabled mb-2">
+            No groups available. Create one first.
           </div>
+          <v-list
+            v-else
+            density="compact"
+            style="max-height: 200px; overflow-y: auto;"
+            class="border rounded"
+          >
+            <!-- Iterate over filteredGroups -->
+            <v-list-item
+              v-for="group in filteredGroups"
+              :key="group.id"
+              :value="group.id"
+              @click="selectedGroupIdForDialog = group.id"
+              :active="selectedGroupIdForDialog === group.id"
+              color="primary"
+            >
+              <v-list-item-title>{{ group.name }}</v-list-item-title>
+            </v-list-item>
+            <!-- Message when filter yields no results but there are groups -->
+            <v-list-item v-if="filteredGroups.length === 0 && groupSearchQuery && store.groups.value.length > 0">
+              <v-list-item-title class="text-caption text-disabled">
+                No groups match your search "{{ groupSearchQuery }}".
+              </v-list-item-title>
+            </v-list-item>
+          </v-list>
+          <!-- This message is already handled by the v-if/v-else on the v-list and the div above it -->
+          <!-- <div v-if="store.groups.value.length === 0" class="text-caption text-disabled mt-2">
+            You need to create a group first before you can assign a repository.
+          </div> -->
         </v-card-text>
         <v-card-actions>
           <v-spacer></v-spacer>
@@ -166,6 +191,17 @@ const draggedRepoId = ref<string | null>(null); // Added for drag operation
 const selectedRepoForGrouping = ref<Repository | null>(null);
 const isAssignGroupDialogVisible = ref(false);
 const selectedGroupIdForDialog = ref<string | null>(null);
+const groupSearchQuery = ref(''); // Added for the new search field
+
+// Computed property for filtering groups
+const filteredGroups = computed(() => {
+  if (!groupSearchQuery.value) {
+    return store.groups.value;
+  }
+  return store.groups.value.filter(group =>
+    group.name.toLowerCase().includes(groupSearchQuery.value.toLowerCase())
+  );
+});
 
 const openOptionsPage = () => {
   router.push('/options');
@@ -259,6 +295,7 @@ const confirmDeleteGroup = async (groupId?: string) => {
 const openAssignGroupDialog = (repo: Repository) => {
   selectedRepoForGrouping.value = repo;
   selectedGroupIdForDialog.value = null; // Reset selection
+  groupSearchQuery.value = ''; // Reset search query
   isAssignGroupDialogVisible.value = true;
   console.log('Open assign group dialog for repo:', repo.name);
 };
@@ -267,6 +304,7 @@ const closeAssignGroupDialog = () => {
   isAssignGroupDialogVisible.value = false;
   selectedRepoForGrouping.value = null;
   selectedGroupIdForDialog.value = null;
+  groupSearchQuery.value = ''; // Also reset search query on close
 };
 
 const confirmAssignGroup = async () => {
