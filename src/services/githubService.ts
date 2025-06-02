@@ -23,7 +23,7 @@ export class GithubService implements ApiService {
       const data = await response.json();
 
       return data.map((repo: any) => ({
-        id: repo.id,
+        id: String(repo.id),
         name: repo.name,
         url: repo.html_url,
         description: repo.description,

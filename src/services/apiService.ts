@@ -1,6 +1,6 @@
 // src/services/apiService.ts
 export interface Repository {
-  id: string | number;
+  id: string;
   name: string;
   url: string;
   description?: string;
