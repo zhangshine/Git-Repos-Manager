@@ -13,8 +13,15 @@ const CACHE_REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 // --- Interval Management ---
 let periodicRefreshIntervalId: number | null = null;
 
+export interface PlatformToken {
+  id: string; // Unique ID for the token (e.g., timestamp or UUID)
+  platform: 'GitHub' | 'GitLab' | 'Bitbucket';
+  token: string;
+  name?: string; // Optional user-friendly name
+}
+
 export interface StoreState {
-  githubToken: string | null;
+  tokens: PlatformToken[];
   repositories: Repository[];
   isLoading: boolean;
   error: string | null;
@@ -24,7 +31,7 @@ export interface StoreState {
 
 // --- State ---
 const state = ref<StoreState>({
-  githubToken: null,
+  tokens: [],
   repositories: [],
   isLoading: false,
   error: null,
@@ -42,7 +49,7 @@ export interface RepoGroup {
 }
 
 // --- Getters (Computed properties) ---
-const isAuthenticated = computed(() => !!state.value.githubToken); // Expand for other services
+const isAuthenticated = computed(() => state.value.tokens.length > 0);
 
 const repositoriesByGroup = computed(() => {
   const lowerCaseQuery = state.value.searchQuery.toLowerCase();
@@ -174,13 +181,24 @@ const repositoriesByGroup = computed(() => {
 // Function to load tokens from localStorage
 function loadTokens() {
   try {
-    const storedGithubToken = localStorage.getItem('githubToken');
-    if (storedGithubToken) {
-      state.value.githubToken = storedGithubToken;
+    const storedTokens = localStorage.getItem('platformTokens');
+    if (storedTokens) {
+      const parsedTokens = JSON.parse(storedTokens) as PlatformToken[];
+      if (Array.isArray(parsedTokens)) {
+        // Basic validation for each token (can be more thorough)
+        state.value.tokens = parsedTokens.filter(
+          t => t.id && t.platform && t.token
+        );
+      } else {
+        state.value.tokens = [];
+        console.warn('Loaded "platformTokens" from localStorage, but it was not an array. Initializing to empty array.');
+      }
+    } else {
+      state.value.tokens = [];
     }
-    // Load other tokens similarly
   } catch (e) {
     console.error('Error loading tokens from localStorage:', e);
+    state.value.tokens = []; // Ensure tokens is an array in case of an error
     state.value.error = 'Could not load token configuration.';
   }
 }
@@ -269,30 +287,59 @@ function setSearchQuery(query: string) {
   state.value.searchQuery = query.trim();
 }
 
-// Function to save GitHub token (now synchronous for localStorage)
-function saveGithubToken(token: string) {
-  if (!token.trim()) {
+// Function to save a platform token
+function saveToken(tokenToSave: PlatformToken) {
+  if (!tokenToSave.token.trim()) {
     throw new Error('Token cannot be empty.');
   }
+  if (!tokenToSave.platform) {
+    throw new Error('Platform must be selected.');
+  }
+
   try {
-    localStorage.setItem('githubToken', token);
-    state.value.githubToken = token;
-    startPeriodicCacheRefresh(); // Start periodic refresh when token is saved
-  } catch (e) {
-    console.error('Error saving GitHub token to localStorage:', e);
-    throw new Error('Failed to save token to local storage.'); // Re-throw or handle as appropriate
+    const existingTokenIndex = state.value.tokens.findIndex(t => t.id === tokenToSave.id);
+    if (existingTokenIndex !== -1) {
+      // Update existing token
+      state.value.tokens[existingTokenIndex] = { ...state.value.tokens[existingTokenIndex], ...tokenToSave };
+    } else {
+      // Add new token
+      const newToken = { ...tokenToSave };
+      if (!newToken.id) { // Ensure ID exists if it's a new token being added without one
+        newToken.id = Date.now().toString();
+      }
+      // Check for duplicate token (same platform and token string) before adding
+      const isDuplicate = state.value.tokens.some(
+        t => t.platform === newToken.platform && t.token === newToken.token && t.id !== newToken.id
+      );
+      if (isDuplicate) {
+        throw new Error(`A token for ${newToken.platform} with the same value already exists.`);
+      }
+      state.value.tokens.push(newToken);
+    }
+    localStorage.setItem('platformTokens', JSON.stringify(state.value.tokens));
+    // If this is the first token, start periodic refresh
+    if (state.value.tokens.length === 1 && existingTokenIndex === -1) {
+       startPeriodicCacheRefresh();
+    }
+  } catch (e: any) {
+    console.error('Error saving token to localStorage:', e);
+    throw new Error(e.message || 'Failed to save token to local storage.');
   }
 }
 
-// Function to clear GitHub token (now synchronous for localStorage)
-function clearGithubToken() {
+// Function to delete a platform token
+function deleteToken(tokenId: string) {
   try {
-    stopPeriodicCacheRefresh(); // Stop periodic refresh before clearing token
-    localStorage.removeItem('githubToken');
-    state.value.githubToken = null;
+    const initialTokenCount = state.value.tokens.length;
+    state.value.tokens = state.value.tokens.filter(t => t.id !== tokenId);
+    localStorage.setItem('platformTokens', JSON.stringify(state.value.tokens));
+    // If all tokens are deleted, stop periodic refresh
+    if (initialTokenCount > 0 && state.value.tokens.length === 0) {
+      stopPeriodicCacheRefresh();
+    }
   } catch (e) {
-    console.error('Error removing GitHub token from localStorage:', e);
-    throw new Error('Failed to clear token from local storage.'); // Re-throw or handle
+    console.error('Error deleting token from localStorage:', e);
+    throw new Error('Failed to delete token from local storage.');
   }
 }
 
@@ -301,12 +348,12 @@ function startPeriodicCacheRefresh() {
   if (periodicRefreshIntervalId !== null) {
     clearInterval(periodicRefreshIntervalId);
   }
-  if (!state.value.githubToken) { // Do not start if no token
+  if (state.value.tokens.length === 0) { // Do not start if no tokens
     return;
   }
   periodicRefreshIntervalId = setInterval(() => {
-    // Check for token again inside interval, in case it was cleared by other means
-    if (state.value.githubToken) {
+    // Check for tokens again inside interval, in case they were cleared by other means
+    if (state.value.tokens.length > 0) {
       console.log('Periodic cache refresh triggered.');
       // Call fetchRepositories with forceRefresh: false
       // This allows fetchRepositories to use its own logic to determine if a fetch is needed
@@ -334,10 +381,10 @@ async function fetchRepositories(options?: { forceRefresh?: boolean; isBackgroun
   const forceRefresh = options?.forceRefresh ?? false;
   const isBackground = options?.isBackground ?? false;
 
-  // Ensure token is available before any attempt to fetch or check cache that relies on it
-  if (!state.value.githubToken) {
-    state.value.error = 'GitHub token is not set. Please configure it in options.';
-    state.value.repositories = []; // Clear repositories if no token
+  if (state.value.tokens.length === 0) {
+    state.value.error = 'No platform tokens are set. Please configure at least one token in options.';
+    state.value.repositories = [];
+    localStorage.removeItem(REPOSITORIES_CACHE_KEY); // Clear cache if no tokens
     return;
   }
 
@@ -367,31 +414,86 @@ async function fetchRepositories(options?: { forceRefresh?: boolean; isBackgroun
     state.value.isLoading = true;
   }
   state.value.error = null; // Clear previous errors regardless of background mode
-  try {
-    const githubService = new GithubService();
-    const githubRepos = await githubService.getRepositories(state.value.githubToken);
-    // In future, fetch from GitLab and Bitbucket and combine
-    state.value.repositories = [...githubRepos];
 
-    // Cache the fetched repositories
+  let allRepositories: Repository[] = [];
+  const errors: string[] = [];
+
+  for (const platformToken of state.value.tokens) {
     try {
-      const cachedData = { timestamp: Date.now(), data: githubRepos };
+      let service;
+      switch (platformToken.platform) {
+        case 'GitHub':
+          service = new GithubService();
+          break;
+        case 'GitLab':
+          service = new GitlabService();
+          break;
+        case 'Bitbucket':
+          service = new BitbucketService();
+          break;
+        default:
+          console.warn(`Unsupported platform: ${platformToken.platform}`);
+          errors.push(`Unsupported platform: ${platformToken.platform} for token ${platformToken.name || platformToken.id}.`);
+          continue;
+      }
+
+      if (!platformToken.token) {
+        console.warn(`Token for ${platformToken.platform} (ID: ${platformToken.id}, Name: ${platformToken.name || 'N/A'}) is empty. Skipping.`);
+        errors.push(`Token for ${platformToken.platform} ${platformToken.name ? `(${platformToken.name})` : `(ID: ${platformToken.id})`} is empty.`);
+        continue;
+      }
+
+      const repos = await service.getRepositories(platformToken.token);
+      // Add a 'sourcePlatform' to each repository to distinguish them if IDs clash
+      // and to know which token/platform it came from.
+      allRepositories.push(...repos.map(repo => ({
+        ...repo,
+        sourcePlatform: platformToken.platform,
+        tokenId: platformToken.id // To trace back to the token if needed
+      })));
+    } catch (e: any) {
+      console.error(`Failed to fetch repositories for ${platformToken.platform} (Token: ${platformToken.name || platformToken.id}):`, e);
+      let errorMessage = `Error fetching from ${platformToken.platform}`;
+      if (platformToken.name) {
+        errorMessage += ` (Token: ${platformToken.name})`;
+      }
+      if (e instanceof ApiError) {
+        errorMessage += `: ${e.message}`;
+      } else {
+        errorMessage += `: An unexpected error occurred.`;
+      }
+      errors.push(errorMessage);
+    }
+  }
+
+  state.value.repositories = allRepositories;
+
+  if (errors.length > 0) {
+    state.value.error = errors.join(' | ');
+  }
+
+  // Cache the aggregated repositories if any were fetched successfully
+  if (allRepositories.length > 0 || state.value.tokens.length > 0) { // Cache even if empty if tokens exist
+    try {
+      const cachedData = { timestamp: Date.now(), data: allRepositories };
       localStorage.setItem(REPOSITORIES_CACHE_KEY, JSON.stringify(cachedData));
     } catch (cacheError) {
       console.error('Error saving repositories to cache:', cacheError);
       // Optionally, inform the user or log this error more formally
+      if (state.value.error) {
+        state.value.error += ' | Failed to cache results.';
+      } else {
+        state.value.error = 'Failed to cache results.';
+      }
     }
+  } else if (state.value.tokens.length === 0) {
+    // If all tokens were removed during the fetch or before, clear the cache.
+    localStorage.removeItem(REPOSITORIES_CACHE_KEY);
+  }
+  // If errors occurred but some repos were fetched, repositories are updated, and errors are set.
+  // If all fetches failed, repositories will be empty, and errors will be set.
 
-  } catch (e: any) {
-    console.error('Failed to fetch repositories:', e);
-    if (e instanceof ApiError) {
-      state.value.error = `API Error: ${e.message}`;
-    } else {
-      state.value.error = 'An unexpected error occurred while fetching repositories.';
-    }
-    state.value.repositories = []; // Clear on error
-  } finally {
-    if (!isBackground) {
+  if (!isBackground) {
       state.value.isLoading = false;
     }
   }
@@ -461,9 +563,9 @@ loadGroups(); // Load groups when store initializes
 
 // New function to initialize and refresh repositories
 async function initializeAndRefreshRepositories() {
-  // Ensure token is available before trying to load/fetch
-  if (!state.value.githubToken) {
-    console.log('Initialization skipped: No token available.');
+  // Ensure tokens are available before trying to load/fetch
+  if (state.value.tokens.length === 0) {
+    console.log('Initialization skipped: No tokens available.');
     // Optionally set an error state or handle as appropriate
     // state.value.error = 'Authentication token not found. Please configure.';
     return;
@@ -493,8 +595,8 @@ async function initializeAndRefreshRepositories() {
 initializeAndRefreshRepositories();
 
 
-// Start periodic refresh if a token is already loaded
-if (state.value.githubToken) {
+// Start periodic refresh if tokens are already loaded
+if (state.value.tokens.length > 0) {
   startPeriodicCacheRefresh();
 }
 
@@ -513,7 +615,7 @@ export function useStore() {
 
   return {
     // State
-    githubToken: readonly(computed(() => state.value.githubToken)),
+    tokens: readonly(computed(() => state.value.tokens)),
     repositories: readonly(computed(() => state.value.repositories)),
     isLoading: readonly(computed(() => state.value.isLoading)),
     error: readonly(computed(() => state.value.error)),
@@ -527,8 +629,8 @@ export function useStore() {
     // Actions
     loadTokens,
     setSearchQuery, // Expose setSearchQuery
-    saveGithubToken,
-    clearGithubToken,
+    saveToken, // New function
+    deleteToken, // New function
     fetchRepositories,
     addGroup, // Expose group actions
     deleteGroup,
