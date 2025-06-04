@@ -1,7 +1,7 @@
 {
-  "name": "app",
+  "name": "repo-groupie",
   "version": "1.0.0",
-  "description": "",
+  "description": "Repo Groupie is a Progressive Web App (PWA) that helps you quickly group and access your software repositories from various Git hosting platforms.",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -14,7 +14,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/zhangshine/Git-Repos-Manager/issues"
   },
